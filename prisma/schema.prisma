@@ -1,0 +1,84 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  email        String   @unique
+  passwordHash String
+  location     String?  @default("Peshawar, KP")
+  carbonGoal   Float?   @default(2.5)
+  points       Int      @default(1280)
+  streak       Int      @default(3)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CarbonCalculation {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String
+  transportEmission Float?
+  foodEmission     Float?
+  totalEmission    Float?
+  transportData    Json?
+  foodData         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Challenge {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String
+  questions   Int      @default(10)
+  durationMin Int      @default(5)
+  points      Int      @default(100)
+  endsIn      String   @default("6d 12h 30m")
+  category    String   @default("Quiz")
+  createdAt   DateTime @default(now())
+}
+
+model UserChallengeProgress {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String
+  challengeId       String
+  completedQuestions Int     @default(0)
+  totalQuestions    Int      @default(10)
+  score             Int      @default(0)
+  isCompleted       Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+}
+
+model Badge {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String
+  icon        String
+  scoreReq    Int
+  createdAt   DateTime @default(now())
+}
+
+model UserBadge {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  badgeId   String
+  unlockedAt DateTime @default(now())
+}

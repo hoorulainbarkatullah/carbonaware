@@ -29,16 +29,7 @@ export default function InsightsPage() {
 
   return (
     <div className="flex flex-col space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 leading-tight">
-            Organizational Insights 🏢
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Real-time carbon footprint audits and department-level efficiency benchmarks.
-          </p>
-        </div>
-
+      <div className="flex justify-end items-center">
         <div className="relative">
           <select className="appearance-none bg-white border border-gray-200 text-gray-700 text-xs font-bold px-4 py-2.5 pr-8 rounded-xl shadow-sm outline-none cursor-pointer hover:bg-gray-50 transition">
             <option>Q2 2026 Audit</option>

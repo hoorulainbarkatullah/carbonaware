@@ -38,11 +38,12 @@ export async function POST(request: Request) {
       createdAt: new Date(),
     };
 
-    await usersCollection.insertOne(newUser);
+    const result = await usersCollection.insertOne(newUser);
 
     return NextResponse.json({
       success: true,
       user: {
+        id: result.insertedId.toString(),
         name: newUser.name,
         email: newUser.email,
         location: newUser.location,

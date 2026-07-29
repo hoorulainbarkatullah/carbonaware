@@ -20,6 +20,32 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState("Ali Khan");
   const [userInitials, setUserInitials] = useState("AK");
 
+  // --- Real DB State ---
+  const [loading, setLoading] = useState(true);
+  const [hasData, setHasData] = useState(false);
+  const [totalEmission, setTotalEmission] = useState(2.4);
+  const [transportEmission, setTransportEmission] = useState(1.08);
+  const [foodEmission, setFoodEmission] = useState(0.36);
+  const [monthlyAverage, setMonthlyAverage] = useState(2.5);
+  const [percentageChange, setPercentageChange] = useState(-10);
+  const [totalCalculationsCount, setTotalCalculationsCount] = useState(5);
+
+  const [lineChartData, setLineChartData] = useState([
+    { month: "Jan", val: 2.0 },
+    { month: "Feb", val: 3.0 },
+    { month: "Mar", val: 2.5 },
+    { month: "Apr", val: 2.0 },
+    { month: "May", val: 2.4 },
+    { month: "Jun", val: 2.4 },
+  ]);
+
+  const [breakdownData, setBreakdownData] = useState([
+    { name: "Transport", pct: 45, val: 1.08, color: "#16a34a" },
+    { name: "Electricity", pct: 30, val: 0.72, color: "#3b82f6" },
+    { name: "Food", pct: 15, val: 0.36, color: "#f59e0b" },
+    { name: "Others", pct: 10, val: 0.24, color: "#a855f7" },
+  ]);
+
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
@@ -37,12 +63,53 @@ export default function DashboardPage() {
         console.error(err);
       }
     }
+
+    async function fetchDashboardStats() {
+      try {
+        setLoading(true);
+        let uid: string | undefined = undefined;
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("user");
+          if (stored) {
+            try {
+              const u = JSON.parse(stored);
+              uid = u.id || u.email;
+            } catch (e) {}
+          }
+        }
+
+        const url = uid ? `/api/dashboard/stats?userId=${encodeURIComponent(uid)}` : "/api/dashboard/stats";
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setHasData(data.hasData);
+            if (data.latest) {
+              setTotalEmission(data.latest.totalEmission);
+              setTransportEmission(data.latest.transportEmission);
+              setFoodEmission(data.latest.foodEmission);
+            }
+            if (data.monthlyAverage !== undefined) setMonthlyAverage(data.monthlyAverage);
+            if (data.percentageChange !== undefined) setPercentageChange(data.percentageChange);
+            if (data.totalCalculations !== undefined) setTotalCalculationsCount(data.totalCalculations);
+            if (data.lineChartData && data.lineChartData.length > 0) setLineChartData(data.lineChartData);
+            if (data.breakdownData && data.breakdownData.length > 0) setBreakdownData(data.breakdownData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard stats:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDashboardStats();
   }, []);
 
   // Leaderboard data
   const leaderboard = [
     { rank: 1, name: "Sara Khan", points: 1200, avatar: "SK", isUser: false },
-    { rank: 2, name: `${userName} (You)`, points: 950, avatar: userInitials, isUser: true },
+    { rank: 2, name: `${userName} (You)`, points: Math.max(100 * totalCalculationsCount, 950), avatar: userInitials, isUser: true },
     { rank: 3, name: "Hamza Bilal", points: 870, avatar: "HB", isUser: false },
     { rank: 4, name: "Ayesha Noor", points: 760, avatar: "AN", isUser: false },
     { rank: 5, name: "Bilal Ahmed", points: 600, avatar: "BA", isUser: false },
@@ -104,25 +171,16 @@ export default function DashboardPage() {
     },
   ];
 
-  // Badges data
+  // Badges data dynamically calculated based on calculation count
   const badges = [
-    { name: "Eco Starter", desc: "First calculation", active: true, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
-    { name: "Consistent Tracker", desc: "Track for 4 weeks", active: true, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
-    { name: "Green Achiever", desc: "Reduce footprint by 10%", active: true, color: "bg-blue-50 text-blue-700 border-blue-100" },
+    { name: "Eco Starter", desc: "First calculation", active: totalCalculationsCount >= 1, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
+    { name: "Consistent Tracker", desc: "Track for 4 weeks", active: totalCalculationsCount >= 4, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
+    { name: "Green Achiever", desc: "Reduce footprint by 10%", active: percentageChange < 0, color: "bg-blue-50 text-blue-700 border-blue-100" },
     { name: "Climate Saver", desc: "Save 500kg CO₂e", active: false, locked: true },
     { name: "Planet Guardian", desc: "Complete 10 challenges", active: false, locked: true },
   ];
 
-  // Emissions data over time (Jan - Jun)
-  const lineChartData = [
-    { month: "Jan", val: 2.0 },
-    { month: "Feb", val: 3.0 },
-    { month: "Mar", val: 2.5 },
-    { month: "Apr", val: 2.0 },
-    { month: "May", val: 2.4 },
-    { month: "Jun", val: 2.4 },
-  ];
-
+  // Chart rendering math
   const chartWidth = 500;
   const chartHeight = 180;
   const paddingLeft = 30;
@@ -130,28 +188,22 @@ export default function DashboardPage() {
   const paddingTop = 20;
   const paddingBottom = 25;
 
+  const maxChartVal = Math.max(...lineChartData.map((d) => d.val), 4.0);
+
   const points = lineChartData.map((d, i) => {
-    const x = paddingLeft + (i * (chartWidth - paddingLeft - paddingRight)) / (lineChartData.length - 1);
-    // Max value is 4.0, map to height
-    const y = chartHeight - paddingBottom - (d.val * (chartHeight - paddingTop - paddingBottom)) / 4.0;
+    const divisor = lineChartData.length > 1 ? lineChartData.length - 1 : 1;
+    const x = paddingLeft + (i * (chartWidth - paddingLeft - paddingRight)) / divisor;
+    const y = chartHeight - paddingBottom - (d.val * (chartHeight - paddingTop - paddingBottom)) / maxChartVal;
     return { x, y, month: d.month, val: d.val };
   });
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaPath = `
+  const areaPath = points.length > 0 ? `
     ${linePath} 
     L ${points[points.length - 1].x} ${chartHeight - paddingBottom} 
     L ${points[0].x} ${chartHeight - paddingBottom} 
     Z
-  `;
-
-  // Donut chart parameters
-  const breakdownData = [
-    { name: "Transport", pct: 45, val: 1.08, color: "#16a34a" },
-    { name: "Electricity", pct: 30, val: 0.72, color: "#3b82f6" },
-    { name: "Food", pct: 15, val: 0.36, color: "#f59e0b" },
-    { name: "Others", pct: 10, val: 0.24, color: "#a855f7" },
-  ];
+  ` : "";
 
   // Compute donut segment arcs
   let accumulatedAngle = 0;
@@ -196,7 +248,7 @@ export default function DashboardPage() {
                     stroke="#16a34a"
                     strokeWidth="11"
                     strokeDasharray={2 * Math.PI * 54}
-                    strokeDashoffset={2 * Math.PI * 54 * (1 - 0.72)} // 72% filled
+                    strokeDashoffset={2 * Math.PI * 54 * (1 - Math.min(totalEmission / 4.0, 1.0))}
                     strokeLinecap="round"
                     className="transition-all duration-1000 ease-out"
                   />
@@ -206,7 +258,7 @@ export default function DashboardPage() {
                   <div className="bg-emerald-50 p-1.5 rounded-full text-emerald-600 mb-1">
                     <Leaf className="w-4 h-4 fill-emerald-600/10" />
                   </div>
-                  <span className="text-2xl font-black text-gray-900 leading-none">2.4</span>
+                  <span className="text-2xl font-black text-gray-900 leading-none">{totalEmission.toFixed(2)}</span>
                   <span className="text-[10px] text-gray-500 font-bold tracking-tight mt-0.5 uppercase">tons CO₂e</span>
                   <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">This Month</span>
                 </div>
@@ -216,11 +268,15 @@ export default function DashboardPage() {
               <div className="text-center sm:text-left flex-1 max-w-sm">
                 <h3 className="text-base font-bold text-gray-800">Your Carbon Footprint</h3>
                 <p className="text-sm text-gray-500 mt-1 leading-snug">
-                  You are doing better than last month!
+                  {!hasData
+                    ? "No calculations recorded yet. Calculate your footprint to get started!"
+                    : percentageChange <= 0
+                    ? "You are doing better than last month!"
+                    : "Emissions increased slightly. Check tips to reduce!"}
                 </p>
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-2.5 text-emerald-600 bg-emerald-50 w-max px-3 py-1 rounded-full text-xs font-extrabold border border-emerald-100">
-                  <TrendingDown className="w-4.5 h-4.5 animate-bounce" />
-                  <span>10% from last month</span>
+                  <TrendingDown className={`w-4.5 h-4.5 animate-bounce ${percentageChange > 0 ? "rotate-180 text-red-500" : ""}`} />
+                  <span>{Math.abs(percentageChange)}% from last calculation</span>
                 </div>
                 <button className="mt-4 flex items-center justify-center sm:justify-start gap-2 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs font-bold px-4 py-2.5 rounded-xl transition duration-200 cursor-pointer">
                   <span>View Full Report</span>
@@ -350,7 +406,7 @@ export default function DashboardPage() {
                 </svg>
 
                 {/* Interactive Tooltip Card overlay */}
-                {hoveredDataIndex !== null && (
+                {hoveredDataIndex !== null && points[hoveredDataIndex] && (
                   <div
                     className="absolute bg-slate-900 text-white rounded-lg px-2.5 py-1.5 text-[10px] font-bold shadow-xl border border-slate-800 transition duration-150 pointer-events-none -translate-x-1/2"
                     style={{
@@ -365,16 +421,16 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* Highlight box for Jun static value shown in the mockup */}
-                {hoveredDataIndex === null && (
+                {/* Highlight box for latest static/dynamic value */}
+                {hoveredDataIndex === null && points.length > 0 && (
                   <div
                     className="absolute bg-white text-gray-900 border border-gray-200 rounded-lg px-2 py-1 shadow-md text-[10px] font-bold -translate-x-1/2"
                     style={{
-                      left: `${(points[5].x / chartWidth) * 100}%`,
-                      bottom: `${((chartHeight - points[5].y + 12) / chartHeight) * 100}%`,
+                      left: `${(points[points.length - 1].x / chartWidth) * 100}%`,
+                      bottom: `${((chartHeight - points[points.length - 1].y + 12) / chartHeight) * 100}%`,
                     }}
                   >
-                    <span className="text-xs font-black text-gray-800">2.4</span>
+                    <span className="text-xs font-black text-gray-800">{points[points.length - 1].val.toFixed(2)}</span>
                     <span className="text-gray-400 ml-0.5">tons</span>
                   </div>
                 )}
@@ -413,7 +469,7 @@ export default function DashboardPage() {
 
                   {/* Donut cutout text */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-base font-black text-gray-800 leading-tight">2.4</span>
+                    <span className="text-base font-black text-gray-800 leading-tight">{totalEmission.toFixed(2)}</span>
                     <span className="text-[8px] text-gray-400 font-bold uppercase tracking-tight">tons CO₂e</span>
                   </div>
                 </div>
@@ -457,12 +513,12 @@ export default function DashboardPage() {
                   <div key={idx} className="flex flex-col items-center text-center group cursor-pointer">
                     <div
                       className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all duration-200 group-hover:scale-105 ${
-                        badge.locked
+                        badge.locked || !badge.active
                           ? "bg-gray-50 text-gray-300 border-gray-200"
                           : badge.color
                       }`}
                     >
-                      {badge.locked ? (
+                      {badge.locked || !badge.active ? (
                         <Lock className="w-5 h-5 text-gray-300" />
                       ) : (
                         <ShieldCheck className="w-6 h-6" />

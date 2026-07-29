@@ -38,6 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       user: {
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         location: user.location || "Peshawar, KP",

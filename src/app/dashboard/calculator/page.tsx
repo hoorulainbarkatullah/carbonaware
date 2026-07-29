@@ -13,105 +13,161 @@ import {
   TrendingDown,
   Lightbulb,
   Bookmark,
-  Sparkles,
   UtensilsCrossed,
-  Info,
   Trash2,
-  MapPinIcon,
   Users,
-  Calculator
+  Calculator,
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
 
 export default function CalculatorPage() {
-  // Active tab state (useful for mobile responsive view toggling)
+  // Active tab state (for mobile responsive view toggling)
   const [activeTab, setActiveTab] = useState<"transport" | "food">("transport");
+
+  // Calculation Document ID tracking
+  const [calculationId, setCalculationId] = useState<string | null>(null);
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // --- Transport Input States ---
   const [fromLocation, setFromLocation] = useState("DHA Phase 5, Lahore");
   const [toLocation, setToLocation] = useState("Arfa Software House, Lahore");
-  const [oneWayDist, setOneWayDist] = useState(12);
-  const [roundTripDist, setRoundTripDist] = useState(24);
-  const [transportType, setTransportType] = useState<"car" | "motorbike" | "bus" | "other">("car");
-  const [fuelType, setFuelType] = useState("Petrol");
-  const [frequency, setFrequency] = useState("Daily");
+  const [transportType, setTransportType] = useState<"car" | "motorbike" | "bus" | "train" | "bicycle" | "walking">("car");
+  const [fuelType, setFuelType] = useState<"Petrol" | "Diesel" | "Hybrid" | "Electric">("Petrol");
+  const [distanceKm, setDistanceKm] = useState<number>(24);
+  const [tripsPerWeek, setTripsPerWeek] = useState<number>(5);
 
   // --- Food & Waste Input States ---
-  const [dietType, setDietType] = useState<"vegetarian" | "mixed" | "meat-heavy">("mixed");
-  const [consumptionLevel, setConsumptionLevel] = useState("Medium");
-  const [foodWasteLevel, setFoodWasteLevel] = useState("Low");
-  const [wasteMgmt, setWasteMgmt] = useState<"recycle" | "sometimes" | "never">("recycle");
+  const [dietType, setDietType] = useState<"vegan" | "vegetarian" | "mixed" | "meat-heavy">("mixed");
+  const [mealsPerDay, setMealsPerDay] = useState<number>(3);
+  const [localFoodPct, setLocalFoodPct] = useState<number>(50);
+  const [foodWasteLevel, setFoodWasteLevel] = useState<"low" | "medium" | "high">("low");
+  const [wasteMgmt, setWasteMgmt] = useState<"recycle" | "compost" | "sometimes" | "never">("recycle");
 
   // --- Calculations ---
-  const [transportFootprint, setTransportFootprint] = useState(1.35);
-  const [foodFootprint, setFoodFootprint] = useState(0.70);
-  const [totalFootprint, setTotalFootprint] = useState(2.05);
+  const [transportFootprint, setTransportFootprint] = useState<number>(1.00);
+  const [foodFootprint, setFoodFootprint] = useState<number>(0.18);
+  const [totalFootprint, setTotalFootprint] = useState<number>(1.18);
 
-  const [transportPct, setTransportPct] = useState(66);
-  const [foodPct, setFoodPct] = useState(34);
+  const [transportPct, setTransportPct] = useState<number>(85);
+  const [foodPct, setFoodPct] = useState<number>(15);
 
-  // Sync one-way distance to round-trip
-  const handleOneWayChange = (val: number) => {
-    setOneWayDist(val);
-    setRoundTripDist(val * 2);
+  // Helper to retrieve logged in user ID or email
+  const getUserId = () => {
+    if (typeof window === "undefined") return undefined;
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      try {
+        const u = JSON.parse(stored);
+        return u.id || u.email;
+      } catch (e) {
+        return undefined;
+      }
+    }
+    return undefined;
   };
 
-  // Sync round-trip back to one-way
-  const handleRoundTripChange = (val: number) => {
-    setRoundTripDist(val);
-    setOneWayDist(Math.round(val / 2));
-  };
-
-  // Calculate results on input change
+  // Load latest calculation from backend on mount
   useEffect(() => {
-    // 1. Calculate Transport
-    let transportFactor = 1.875; // Baseline for Petrol Car
+    async function fetchLatest() {
+      try {
+        const uid = getUserId();
+        const url = uid ? `/api/calculator/latest?userId=${encodeURIComponent(uid)}` : "/api/calculator/latest";
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.calculation) {
+          const calc = data.calculation;
+          setCalculationId(calc.id);
+          if (calc.transportEmission !== null && calc.transportEmission !== undefined) {
+            setTransportFootprint(calc.transportEmission);
+          }
+          if (calc.foodEmission !== null && calc.foodEmission !== undefined) {
+            setFoodFootprint(calc.foodEmission);
+          }
+          if (calc.totalEmission !== null && calc.totalEmission !== undefined) {
+            setTotalFootprint(calc.totalEmission);
+          }
+
+          if (calc.transportData) {
+            const td = calc.transportData;
+            if (td.fromLocation) setFromLocation(td.fromLocation);
+            if (td.toLocation) setToLocation(td.toLocation);
+            if (td.transportType) setTransportType(td.transportType);
+            if (td.fuelType) setFuelType(td.fuelType);
+            if (td.distanceKm !== undefined) setDistanceKm(td.distanceKm);
+            if (td.tripsPerWeek !== undefined) setTripsPerWeek(td.tripsPerWeek);
+          }
+
+          if (calc.foodData) {
+            const fd = calc.foodData;
+            if (fd.dietType) setDietType(fd.dietType);
+            if (fd.mealsPerDay !== undefined) setMealsPerDay(fd.mealsPerDay);
+            if (fd.localFoodPct !== undefined) setLocalFoodPct(fd.localFoodPct);
+            if (fd.foodWasteLevel) setFoodWasteLevel(fd.foodWasteLevel);
+            if (fd.wasteMgmt) setWasteMgmt(fd.wasteMgmt);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load latest calculation:", err);
+      }
+    }
+    fetchLatest();
+  }, []);
+
+  // Calculate live results client-side for smooth UX feedback
+  useEffect(() => {
+    // 1. Transport Calculation
+    let emissionPerKm = 0.192;
     if (transportType === "car") {
-      if (fuelType === "Diesel") transportFactor = 1.70;
-      if (fuelType === "Hybrid") transportFactor = 0.90;
-      if (fuelType === "Electric") transportFactor = 0.25;
+      if (fuelType === "Diesel") emissionPerKm = 0.171;
+      else if (fuelType === "Hybrid") emissionPerKm = 0.108;
+      else if (fuelType === "Electric") emissionPerKm = 0.045;
+      else emissionPerKm = 0.192;
     } else if (transportType === "motorbike") {
-      transportFactor = 0.70;
+      if (fuelType === "Electric") emissionPerKm = 0.025;
+      else emissionPerKm = 0.103;
     } else if (transportType === "bus") {
-      transportFactor = 0.15;
-    } else {
-      transportFactor = 0.35;
+      emissionPerKm = 0.089;
+    } else if (transportType === "train") {
+      emissionPerKm = 0.035;
+    } else if (transportType === "bicycle" || transportType === "walking") {
+      emissionPerKm = 0.0;
     }
 
-    let freqMultiplier = 30; // Daily
-    if (frequency === "Weekly") freqMultiplier = 4;
-    if (frequency === "Monthly") freqMultiplier = 1;
-
-    // Transport emissions in tons/month
-    const calcTransport = (roundTripDist * freqMultiplier * transportFactor) / 1000;
+    const monthlyDistanceKm = (distanceKm || 0) * (tripsPerWeek || 0) * 4.33;
+    const calcTransport = (monthlyDistanceKm * emissionPerKm) / 1000;
     setTransportFootprint(parseFloat(calcTransport.toFixed(2)));
 
-    // 2. Calculate Food & Waste
-    let dietBase = 0.60;
-    if (dietType === "vegetarian") dietBase = 0.40;
-    if (dietType === "meat-heavy") dietBase = 0.90;
+    // 2. Food Calculation
+    let dietBase = 0.20;
+    if (dietType === "vegan") dietBase = 0.10;
+    else if (dietType === "vegetarian") dietBase = 0.14;
+    else if (dietType === "meat-heavy") dietBase = 0.28;
 
-    let consumptionFactor = 0.0;
-    if (consumptionLevel === "Low") consumptionFactor = -0.15;
-    if (consumptionLevel === "High") consumptionFactor = 0.20;
+    const mealFactor = (mealsPerDay || 3) / 3.0;
+    const localMultiplier = 1.0 - ((localFoodPct || 0) / 100) * 0.20;
+    let wasteMultiplier = 1.0;
+    if (foodWasteLevel === "medium") wasteMultiplier = 1.15;
+    else if (foodWasteLevel === "high") wasteMultiplier = 1.30;
 
-    let wasteFactor = 0.0;
-    if (foodWasteLevel === "Medium") wasteFactor = 0.10;
-    if (foodWasteLevel === "High") wasteFactor = 0.25;
+    let wasteMgmtBonus = 0.0;
+    if (wasteMgmt === "compost" || wasteMgmt === "recycle") wasteMgmtBonus = -0.02;
+    else if (wasteMgmt === "never") wasteMgmtBonus = 0.04;
 
-    let recycleFactor = 0.10;
-    if (wasteMgmt === "sometimes") recycleFactor = 0.20;
-    if (wasteMgmt === "never") recycleFactor = 0.30;
-
-    const calcFood = dietBase + consumptionFactor + wasteFactor + recycleFactor;
+    const calcFood = Math.max(0.02, (dietBase * mealFactor * localMultiplier * wasteMultiplier) + wasteMgmtBonus);
     setFoodFootprint(parseFloat(calcFood.toFixed(2)));
 
   }, [
-    roundTripDist,
     transportType,
     fuelType,
-    frequency,
+    distanceKm,
+    tripsPerWeek,
     dietType,
-    consumptionLevel,
+    mealsPerDay,
+    localFoodPct,
     foodWasteLevel,
     wasteMgmt
   ]);
@@ -130,6 +186,172 @@ export default function CalculatorPage() {
       setFoodPct(0);
     }
   }, [transportFootprint, foodFootprint]);
+
+  // Clear alert banners
+  const clearAlerts = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
+  // Handle Calculate Transport action
+  const handleCalculateTransport = async () => {
+    clearAlerts();
+
+    if (distanceKm < 0 || tripsPerWeek < 0) {
+      setErrorMessage("Distance and trips per week cannot be negative numbers.");
+      return;
+    }
+
+    try {
+      const payload = {
+        action: "transport",
+        userId: getUserId(),
+        calculationId,
+        transportData: {
+          fromLocation,
+          toLocation,
+          transportType,
+          fuelType,
+          distanceKm,
+          tripsPerWeek
+        }
+      };
+
+      const res = await fetch("/api/calculator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || "Failed to calculate transport emission.");
+        return;
+      }
+
+      if (data.success && data.calculation) {
+        setCalculationId(data.calculation.id);
+        if (data.calculation.transportEmission !== null) {
+          setTransportFootprint(data.calculation.transportEmission);
+        }
+        setSuccessMessage("Transport footprint calculated!");
+      }
+    } catch (err) {
+      console.error("Failed to calculate transport emission:", err);
+      setErrorMessage("An unexpected network error occurred.");
+    }
+  };
+
+  // Handle Calculate Food action
+  const handleCalculateFood = async () => {
+    clearAlerts();
+
+    if (mealsPerDay < 1 || localFoodPct < 0 || localFoodPct > 100) {
+      setErrorMessage("Please enter valid food parameters.");
+      return;
+    }
+
+    try {
+      const payload = {
+        action: "food",
+        userId: getUserId(),
+        calculationId,
+        foodData: {
+          dietType,
+          mealsPerDay,
+          localFoodPct,
+          foodWasteLevel,
+          wasteMgmt
+        }
+      };
+
+      const res = await fetch("/api/calculator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || "Failed to calculate food emission.");
+        return;
+      }
+
+      if (data.success && data.calculation) {
+        setCalculationId(data.calculation.id);
+        if (data.calculation.foodEmission !== null) {
+          setFoodFootprint(data.calculation.foodEmission);
+        }
+        setSuccessMessage("Food footprint calculated!");
+      }
+    } catch (err) {
+      console.error("Failed to calculate food emission:", err);
+      setErrorMessage("An unexpected network error occurred.");
+    }
+  };
+
+  // Handle Save Result / Final calculation
+  const handleSaveResult = async () => {
+    clearAlerts();
+
+    try {
+      const payload = {
+        action: "complete",
+        userId: getUserId(),
+        calculationId,
+        transportData: {
+          fromLocation,
+          toLocation,
+          transportType,
+          fuelType,
+          distanceKm,
+          tripsPerWeek
+        },
+        foodData: {
+          dietType,
+          mealsPerDay,
+          localFoodPct,
+          foodWasteLevel,
+          wasteMgmt
+        }
+      };
+
+      const res = await fetch("/api/calculator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || "Failed to save calculation.");
+        return;
+      }
+
+      if (data.success && data.calculation) {
+        setCalculationId(data.calculation.id);
+        if (data.calculation.totalEmission !== null) {
+          setTotalFootprint(data.calculation.totalEmission);
+        }
+        setIsCompleted(true);
+        setSuccessMessage("Calculation saved successfully to database!");
+      }
+    } catch (err) {
+      console.error("Failed to save carbon calculation result:", err);
+      setErrorMessage("An unexpected network error occurred.");
+    }
+  };
+
+  // Status message & recommendation tip based on total emissions
+  const getCarbonTip = () => {
+    if (totalFootprint < 1.0) {
+      return "Excellent eco-score! Keep up your low-carbon commuting and sustainable diet habits.";
+    } else if (totalFootprint <= 2.5) {
+      return "Consider carpooling, choosing public transport, or trying plant-based meal options.";
+    } else {
+      return "Your footprint is higher than average. Switching to public transport or reducing food waste can lower your footprint significantly.";
+    }
+  };
 
   return (
     <div className="flex flex-col space-y-6">
@@ -169,6 +391,21 @@ export default function CalculatorPage() {
         </div>
       </div>
 
+      {/* ALERT BANNERS */}
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
       {/* 3-COLUMN RESPONSIVE LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
         
@@ -190,49 +427,46 @@ export default function CalculatorPage() {
 
             {/* Commute Inputs */}
             <div className="space-y-3.5 pt-2">
-              {/* From */}
+              {/* From Location */}
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">From (Home)</label>
+                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Start Location</label>
                 <div className="relative">
                   <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     value={fromLocation}
                     onChange={(e) => setFromLocation(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                    placeholder="Enter start location..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
                   />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600">
-                    <MapPin className="w-4 h-4 text-emerald-600" />
-                  </button>
                 </div>
               </div>
 
-              {/* To */}
+              {/* Destination Location */}
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">To (Workplace)</label>
+                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Destination</label>
                 <div className="relative">
                   <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     value={toLocation}
                     onChange={(e) => setToLocation(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                    placeholder="Enter destination..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
                   />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600">
-                    <MapPin className="w-4 h-4 text-emerald-600" />
-                  </button>
                 </div>
               </div>
 
-              {/* Distance grid */}
+              {/* Distance & Trips per week */}
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">One-way Distance</label>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Distance (KM)</label>
                   <div className="relative">
                     <input
                       type="number"
-                      value={oneWayDist}
-                      onChange={(e) => handleOneWayChange(parseInt(e.target.value) || 0)}
+                      min="0"
+                      value={distanceKm}
+                      onChange={(e) => setDistanceKm(Math.max(0, parseFloat(e.target.value) || 0))}
                       className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
                     />
                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">km</span>
@@ -240,15 +474,17 @@ export default function CalculatorPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Round Trip</label>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Trips Per Week</label>
                   <div className="relative">
                     <input
                       type="number"
-                      value={roundTripDist}
-                      onChange={(e) => handleRoundTripChange(parseInt(e.target.value) || 0)}
+                      min="0"
+                      max="14"
+                      value={tripsPerWeek}
+                      onChange={(e) => setTripsPerWeek(Math.max(0, parseInt(e.target.value) || 0))}
                       className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50/20 text-emerald-800 font-extrabold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-emerald-600">km</span>
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-emerald-600">trips</span>
                   </div>
                 </div>
               </div>
@@ -256,17 +492,19 @@ export default function CalculatorPage() {
               {/* Transport Type selector grid */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-gray-400 mb-2">Transport Type</label>
-                <div className="grid grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: "car", label: "Car", icon: <Car className="w-4 h-4" /> },
-                    { id: "motorbike", label: "Motorbike", icon: <Zap className="w-4 h-4" /> },
+                    { id: "motorbike", label: "Motorcycle", icon: <Zap className="w-4 h-4" /> },
                     { id: "bus", label: "Bus", icon: <Users className="w-4 h-4" /> },
-                    { id: "other", label: "Other", icon: <span className="text-[10px] leading-none">•••</span> }
+                    { id: "train", label: "Train", icon: <Car className="w-4 h-4 text-emerald-600" /> },
+                    { id: "bicycle", label: "Bicycle", icon: <Leaf className="w-4 h-4 text-emerald-600" /> },
+                    { id: "walking", label: "Walking", icon: <Leaf className="w-4 h-4 text-emerald-600" /> }
                   ].map((item) => (
                     <button
                       key={item.id}
                       onClick={() => setTransportType(item.id as any)}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 justify-center transition cursor-pointer ${
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 justify-center transition cursor-pointer ${
                         transportType === item.id
                           ? "bg-emerald-50 text-emerald-700 border-emerald-500"
                           : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
@@ -279,21 +517,20 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-              {/* Car details dropdowns */}
-              <div className="grid grid-cols-2 gap-3.5">
+              {/* Fuel Type dropdown (visible when Car or Motorcycle) */}
+              {(transportType === "car" || transportType === "motorbike") && (
                 <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Car Type / Fuel</label>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Fuel Type</label>
                   <div className="relative">
                     <select
                       value={fuelType}
-                      onChange={(e) => setFuelType(e.target.value)}
-                      disabled={transportType !== "car"}
-                      className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+                      onChange={(e) => setFuelType(e.target.value as any)}
+                      className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
                     >
-                      <option>Petrol</option>
-                      <option>Diesel</option>
-                      <option>Hybrid</option>
-                      <option>Electric</option>
+                      <option value="Petrol">Petrol</option>
+                      <option value="Diesel">Diesel</option>
+                      <option value="Hybrid">Hybrid</option>
+                      <option value="Electric">Electric</option>
                     </select>
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
                       <Zap className="w-3.5 h-3.5 text-gray-400" />
@@ -301,33 +538,17 @@ export default function CalculatorPage() {
                     <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Travel Frequency</label>
-                  <div className="relative">
-                    <select
-                      value={frequency}
-                      onChange={(e) => setFrequency(e.target.value)}
-                      className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
-                    >
-                      <option>Daily</option>
-                      <option>Weekly</option>
-                      <option>Monthly</option>
-                    </select>
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                    </span>
-                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
           {/* Calculate button & did you know box */}
           <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
-            <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs">
-              <span>Calculate Transport Footprint</span>
+            <button
+              onClick={handleCalculateTransport}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs"
+            >
+              <span>Calculate Transport</span>
               <Calculator className="w-4 h-4" />
             </button>
 
@@ -339,7 +560,7 @@ export default function CalculatorPage() {
                   <span>Did you know?</span>
                 </p>
                 <p className="text-[9px] text-gray-550 leading-relaxed font-bold">
-                  Using public transport just 2 times a week can reduce your annual emissions by up to 1 ton of CO₂.
+                  Using public transport or walking just twice a week saves over 0.5 tons of CO₂ per year.
                 </p>
               </div>
               <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-white rounded-xl shadow-sm border border-emerald-100">
@@ -360,8 +581,8 @@ export default function CalculatorPage() {
                 <UtensilsCrossed className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-gray-900">🥗 .Food & Waste Footprint</h3>
-                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your food habits and waste management</p>
+                <h3 className="text-sm font-black text-gray-900">2. Food & Waste Footprint</h3>
+                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your diet and waste habits</p>
               </div>
             </div>
 
@@ -370,45 +591,59 @@ export default function CalculatorPage() {
               {/* Diet Type */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-gray-400 mb-2">Diet Type</label>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: "vegetarian", label: "Vegetarian", icon: <Leaf className="w-4.5 h-4.5" /> },
-                    { id: "mixed", label: "Mixed", icon: <Leaf className="w-4.5 h-4.5 text-emerald-600 fill-emerald-600/10" /> },
-                    { id: "meat-heavy", label: "Meat-heavy", icon: <Zap className="w-4.5 h-4.5" /> }
+                    { id: "vegan", label: "Vegan", icon: <Leaf className="w-4 h-4 text-emerald-600" /> },
+                    { id: "vegetarian", label: "Vegetarian", icon: <Leaf className="w-4 h-4" /> },
+                    { id: "mixed", label: "Mixed", icon: <Leaf className="w-4 h-4 text-emerald-600 fill-emerald-600/10" /> },
+                    { id: "meat-heavy", label: "Meat Heavy", icon: <Zap className="w-4 h-4 text-amber-500" /> }
                   ].map((item) => (
                     <button
                       key={item.id}
                       onClick={() => setDietType(item.id as any)}
-                      className={`p-3.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
+                      className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 transition cursor-pointer ${
                         dietType === item.id
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-500"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-500 font-black"
                           : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
                       }`}
                     >
                       {item.icon}
-                      <span className="text-[9px] font-black">{item.label}</span>
+                      <span className="text-[10px]">{item.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Food Consumption Level */}
-              <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Food Consumption Level</label>
-                <div className="relative">
-                  <select
-                    value={consumptionLevel}
-                    onChange={(e) => setConsumptionLevel(e.target.value)}
-                    className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
-                  >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                  </select>
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                  </span>
-                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              {/* Meals Per Day & Local Food % */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Meals Per Day</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={mealsPerDay}
+                      onChange={(e) => setMealsPerDay(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">meals</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Local Food %</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={localFoodPct}
+                      onChange={(e) => setLocalFoodPct(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                      className="w-full pl-4 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">%</span>
+                  </div>
                 </div>
               </div>
 
@@ -418,12 +653,12 @@ export default function CalculatorPage() {
                 <div className="relative">
                   <select
                     value={foodWasteLevel}
-                    onChange={(e) => setFoodWasteLevel(e.target.value)}
-                    className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
+                    onChange={(e) => setFoodWasteLevel(e.target.value as any)}
+                    className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none capitalize"
                   >
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
                   </select>
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
@@ -435,23 +670,24 @@ export default function CalculatorPage() {
               {/* Waste Management */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-gray-400 mb-2">Waste Management</label>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: "recycle", label: "Recycle", icon: <Leaf className="w-4 h-4 text-emerald-600" /> },
+                    { id: "compost", label: "Compost", icon: <Leaf className="w-4 h-4 text-emerald-700" /> },
                     { id: "sometimes", label: "Sometimes", icon: <Calendar className="w-4 h-4 text-gray-400" /> },
                     { id: "never", label: "Never", icon: <Trash2 className="w-4 h-4 text-red-400" /> }
                   ].map((item) => (
                     <button
                       key={item.id}
                       onClick={() => setWasteMgmt(item.id as any)}
-                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
+                      className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 transition cursor-pointer ${
                         wasteMgmt === item.id
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-500"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-500 font-black"
                           : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
                       }`}
                     >
                       {item.icon}
-                      <span className="text-[9px] font-black">{item.label}</span>
+                      <span className="text-[10px]">{item.label}</span>
                     </button>
                   ))}
                 </div>
@@ -460,8 +696,11 @@ export default function CalculatorPage() {
           </div>
 
           <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
-            <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs">
-              <span>Calculate Food Footprint</span>
+            <button
+              onClick={handleCalculateFood}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs"
+            >
+              <span>Calculate Food</span>
               <Calculator className="w-4 h-4" />
             </button>
           </div>
@@ -473,7 +712,7 @@ export default function CalculatorPage() {
           <div className="space-y-5">
             <div>
               <h3 className="text-sm font-extrabold text-gray-900">Your Carbon Footprint</h3>
-              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Here's your estimated breakdown</p>
+              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Live estimated breakdown</p>
             </div>
 
             {/* Circular Gauge */}
@@ -495,7 +734,7 @@ export default function CalculatorPage() {
                   stroke="#16a34a"
                   strokeWidth="12"
                   strokeDasharray={2 * Math.PI * 68}
-                  strokeDashoffset={2 * Math.PI * 68 * (1 - (totalFootprint / 3.5))} // Scaled out of 3.5 tons max
+                  strokeDashoffset={2 * Math.PI * 68 * (1 - Math.min(1, totalFootprint / 3.0))}
                   strokeLinecap="round"
                   className="transition-all duration-700 ease-out"
                 />
@@ -509,7 +748,7 @@ export default function CalculatorPage() {
                 {/* Improvement pill */}
                 <div className="mt-2.5 flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-black border border-emerald-100">
                   <TrendingDown className="w-3 h-3 text-emerald-700" />
-                  <span>15% better</span>
+                  <span>Calculated Live</span>
                 </div>
               </div>
             </div>
@@ -521,7 +760,7 @@ export default function CalculatorPage() {
                 <div className="flex justify-between items-center text-xs font-bold text-gray-700">
                   <div className="flex items-center gap-2">
                     <Car className="w-4 h-4 text-gray-400" />
-                    <span>Transport Footprint</span>
+                    <span>Transport Emission</span>
                   </div>
                   <span>{transportFootprint.toFixed(2)} tons CO₂</span>
                 </div>
@@ -543,7 +782,7 @@ export default function CalculatorPage() {
                 <div className="flex justify-between items-center text-xs font-bold text-gray-700">
                   <div className="flex items-center gap-2">
                     <UtensilsCrossed className="w-4 h-4 text-gray-400" />
-                    <span>Food & Waste Footprint</span>
+                    <span>Food Emission</span>
                   </div>
                   <span>{foodFootprint.toFixed(2)} tons CO₂</span>
                 </div>
@@ -564,20 +803,23 @@ export default function CalculatorPage() {
 
           {/* Tips and actions */}
           <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
-            {/* Tips widget */}
+            {/* Dynamic Tip widget based on real calculation result */}
             <div className="bg-[#f0fdf4] border border-[#bbf7d0]/40 p-3.5 rounded-2xl flex items-start gap-2.5">
               <Lightbulb className="w-4.5 h-4.5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-[10px] font-black text-emerald-800">Tip to reduce your footprint</p>
                 <p className="text-[9px] text-gray-650 leading-relaxed font-semibold mt-0.5">
-                  Consider carpooling or using public transport and try reducing food waste.
+                  {getCarbonTip()}
                 </p>
               </div>
             </div>
 
             {/* Actions Buttons */}
             <div className="grid grid-cols-2 gap-3.5">
-              <button className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-600 font-extrabold py-2.5 rounded-xl text-xs hover:bg-gray-50 transition cursor-pointer shadow-sm">
+              <button
+                onClick={handleSaveResult}
+                className="flex items-center justify-center gap-2 border border-gray-200 bg-white text-gray-600 font-extrabold py-2.5 rounded-xl text-xs hover:bg-gray-50 transition cursor-pointer shadow-sm"
+              >
                 <Bookmark className="w-4 h-4" />
                 <span>Save Result</span>
               </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -18,7 +18,11 @@ import {
   Sun,
   ChevronDown,
   Menu,
-  X
+  X,
+  LayoutDashboard,
+  LogOut,
+  CheckCircle,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,25 +38,102 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string; location: string } | null>(null);
+  const [user, setUser] = useState<{ id?: string; name: string; email: string; location: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
-  useEffect(() => {
+  // Weather state
+  const [weatherTemp, setWeatherTemp] = useState<string>("26°C");
+
+  // Notifications state & dropdown toggle
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Profile dropdown toggle
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  const syncUserSession = () => {
     const storedUser = localStorage.getItem("user");
     if (!storedUser) {
       router.replace("/signin");
     } else {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+
+        // Fetch Weather
+        fetch(`/api/weather?location=${encodeURIComponent(parsed.location || "Peshawar, KP")}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.temp) setWeatherTemp(data.temp);
+          })
+          .catch(() => {});
+
+        // Fetch Notifications
+        const uid = parsed.id || parsed.email;
+        fetch(`/api/user/notifications?userId=${encodeURIComponent(uid)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              setNotifications(data.notifications || []);
+              setUnreadCount(data.unreadCount || 0);
+            }
+          })
+          .catch(() => {});
+
       } catch (err) {
         console.error("Failed to parse user session", err);
         router.replace("/signin");
       }
     }
     setLoading(false);
+  };
+
+  useEffect(() => {
+    syncUserSession();
+    window.addEventListener("userUpdated", syncUserSession);
+    return () => window.removeEventListener("userUpdated", syncUserSession);
   }, [router]);
+
+  // Outside clicks
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    const nextState = !showNotifications;
+    setShowNotifications(nextState);
+    if (nextState && unreadCount > 0 && user) {
+      setUnreadCount(0);
+      try {
+        const uid = user.id || user.email;
+        await fetch("/api/user/notifications", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: uid }),
+        });
+      } catch (e) {}
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem("user");
+    router.push("/signin");
+  };
 
   // Helper to extract user initials
   const getInitials = (name: string) => {
@@ -138,11 +219,6 @@ export default function DashboardLayout({
           isWelcome: true
         };
     }
-  };
-
-  const logout = () => {
-    localStorage.removeItem("user");
-    router.push("/signin");
   };
 
   if (loading || !user) {
@@ -251,26 +327,6 @@ export default function DashboardLayout({
               </button>
             </div>
           </div>
-
-          {/* User profile footer */}
-          <div className="flex items-center justify-between pt-4 border-t border-emerald-950/60">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-700/50 flex items-center justify-center font-bold text-white border border-emerald-600/30 text-xs uppercase">
-                {getInitials(user.name)}
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white line-clamp-1 max-w-[120px]">{user.name}</p>
-                <p className="text-[11px] text-emerald-400/80 font-medium">{user.location || "Peshawar, KP"}</p>
-              </div>
-            </div>
-            <button
-              onClick={logout}
-              title="Logout"
-              className="text-emerald-400/70 hover:text-red-400 cursor-pointer p-1 rounded hover:bg-white/5 transition"
-            >
-              <ChevronDown className="w-4 h-4 transform rotate-90" />
-            </button>
-          </div>
         </div>
       </aside>
 
@@ -307,36 +363,116 @@ export default function DashboardLayout({
           <div className="flex items-center gap-3.5 self-stretch sm:self-auto justify-end">
             {header.isWelcome ? (
               <>
-                {/* Location */}
+                {/* Real Location */}
                 <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-200/85 shadow-sm text-sm font-semibold text-gray-700 flex-1 sm:flex-none justify-center">
-                  <MapPin className="w-4.5 h-4.5 text-gray-400" />
+                  <MapPin className="w-4.5 h-4.5 text-emerald-600" />
                   <span>{user.location || "Peshawar, KP"}</span>
                 </div>
 
-                {/* Weather */}
+                {/* Real Weather */}
                 <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-200/85 shadow-sm text-sm font-semibold text-gray-700 flex-1 sm:flex-none justify-center">
                   <Sun className="w-4.5 h-4.5 text-amber-500" />
-                  <span>26°C</span>
+                  <span>{weatherTemp}</span>
                 </div>
               </>
             ) : null}
 
-            {/* Notifications Bell */}
-            <button className="relative p-2.5 rounded-xl bg-white border border-gray-200/85 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition shadow-sm cursor-pointer">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
-            </button>
+            {/* Notifications Bell Dropdown */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={handleToggleNotifications}
+                className="relative p-2.5 rounded-xl bg-white border border-gray-200/85 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition shadow-sm cursor-pointer"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white" />
+                )}
+              </button>
 
-            {/* Profile Avatar Card exactly matching calculator mockup */}
-            <div className="flex items-center gap-2.5 bg-white pl-2.5 pr-4 py-1.5 rounded-full border border-gray-200/80 shadow-sm">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center border border-emerald-200 shadow-sm text-xs uppercase">
-                {getInitials(user.name)}
-              </div>
-              <div className="text-left leading-tight hidden sm:block">
-                <p className="text-xs font-black text-gray-900">{user.name}</p>
-                <p className="text-[10px] text-emerald-600 font-bold">Eco Warrior</p>
-              </div>
+              {showNotifications && (
+                <div className="absolute right-0 top-12 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 p-4 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                    <h3 className="text-xs font-black text-gray-900">Notifications</h3>
+                    <span className="text-[10px] font-extrabold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
+                      {notifications.length} alerts
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`p-2.5 rounded-xl border text-xs space-y-1 transition ${
+                          n.read ? "bg-white border-gray-100" : "bg-emerald-50/40 border-emerald-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-gray-900">{n.title}</span>
+                          <span className="text-[9px] text-gray-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Recently
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 leading-relaxed">{n.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Profile Avatar Card Dropdown */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2.5 bg-white pl-2.5 pr-4 py-1.5 rounded-full border border-gray-200/80 shadow-sm hover:border-emerald-500 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center border border-emerald-200 shadow-sm text-xs uppercase">
+                  {getInitials(user.name)}
+                </div>
+                <div className="text-left leading-tight hidden sm:block">
+                  <p className="text-xs font-black text-gray-900">{user.name}</p>
+                  <p className="text-[10px] text-emerald-600 font-bold">Eco Warrior</p>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />
+              </button>
+
+              {showProfileMenu && (
+                <div className="absolute right-0 top-12 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 py-2 text-xs font-bold text-gray-700 animate-fadeIn">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-xs font-extrabold text-gray-900 leading-tight">{user.name}</p>
+                    <p className="text-[10px] text-gray-400 font-medium truncate">{user.email}</p>
+                  </div>
+
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setShowProfileMenu(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-emerald-600" />
+                    <span>Dashboard</span>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/settings"
+                    onClick={() => setShowProfileMenu(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                  >
+                    <Settings className="w-4 h-4 text-emerald-600" />
+                    <span>Settings</span>
+                  </Link>
+
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 transition border-t border-gray-100 mt-1 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-red-500" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </header>
 

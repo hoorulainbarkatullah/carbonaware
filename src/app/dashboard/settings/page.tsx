@@ -1,49 +1,135 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   User,
   Shield,
   Bell,
   Check,
-  TrendingDown,
-  Info
+  Info,
+  AlertCircle
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [name, setName] = useState("Ali Khan");
   const [email, setEmail] = useState("ali.khan@peshawar.kp.edu");
   const [location, setLocation] = useState("Peshawar, KP");
-  
+
   // Targets
   const [monthlyLimit, setMonthlyLimit] = useState(2.5);
-  
+
   // Toggles
   const [notifyLimit, setNotifyLimit] = useState(true);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [showLeaderboard, setShowLeaderboard] = useState(true);
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  // Load user data from localStorage and DB
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        setLoading(true);
+        const stored = localStorage.getItem("user");
+        let userEmail = "";
+        if (stored) {
+          try {
+            const u = JSON.parse(stored);
+            if (u.name) setName(u.name);
+            if (u.email) {
+              setEmail(u.email);
+              userEmail = u.email;
+            }
+            if (u.location) setLocation(u.location);
+            if (u.carbonGoal) setMonthlyLimit(u.carbonGoal);
+          } catch (e) { }
+        }
+
+        if (userEmail) {
+          const res = await fetch(`/api/user/settings?email=${encodeURIComponent(userEmail)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.user) {
+              const u = data.user;
+              setName(u.name);
+              setEmail(u.email);
+              setLocation(u.location || "Peshawar, KP");
+              setMonthlyLimit(u.carbonGoal ?? 2.5);
+              setNotifyLimit(u.notifyLimit ?? true);
+              setWeeklyDigest(u.weeklyDigest ?? true);
+              setShowLeaderboard(u.showLeaderboard ?? true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setErrorMessage(null);
+    setSaving(true);
+
+    try {
+      const payload = {
+        email,
+        name,
+        location,
+        carbonGoal: monthlyLimit,
+        notifyLimit,
+        weeklyDigest,
+        showLeaderboard,
+      };
+
+      const res = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMessage(data.error || "Failed to update settings.");
+        return;
+      }
+
+      if (data.success && data.user) {
+        // Update local session storage
+        localStorage.setItem("user", JSON.stringify(data.user));
+        // Dispatch custom window event so Navbar & Layout update immediately without reload
+        window.dispatchEvent(new Event("userUpdated"));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      setErrorMessage("Network error while saving settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="flex flex-col space-y-6 max-w-4xl">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900 leading-tight">
-          Account Settings ⚙️
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Update profile configurations, targets thresholds, and carbon notification rules.
-        </p>
-      </div>
+    <div className="flex flex-col space-y-6 max-w-4xl"> 
+
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        
+
         {/* LEFT COLUMN: PROFILE FORM */}
         <div className="md:col-span-2 space-y-6">
           {/* Profile details card */}
@@ -80,9 +166,10 @@ export default function SettingsPage() {
                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Email Address</label>
                 <input
                   type="email"
+                  disabled
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -155,7 +242,7 @@ export default function SettingsPage() {
                 onChange={(e) => setMonthlyLimit(parseFloat(e.target.value))}
                 className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
               />
-              
+
               <div className="bg-emerald-50/50 p-3 rounded-xl flex items-start gap-2 text-[10px]">
                 <Info className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <p className="text-emerald-800 leading-relaxed font-semibold">
@@ -168,7 +255,8 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <button
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition cursor-pointer text-xs flex items-center justify-center gap-2"
+              disabled={saving}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition cursor-pointer text-xs flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {saved ? (
                 <>
@@ -176,15 +264,8 @@ export default function SettingsPage() {
                   <span>Changes Saved Successfully!</span>
                 </>
               ) : (
-                <span>Save All Configurations</span>
+                <span>{saving ? "Saving..." : "Save All Configurations"}</span>
               )}
-            </button>
-            
-            <button
-              type="button"
-              className="w-full bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 font-extrabold py-3.5 rounded-xl transition cursor-pointer text-xs"
-            >
-              Cancel & Discard
             </button>
           </div>
         </div>
