@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,6 +28,8 @@ export async function GET(request: Request) {
         email: user.email,
         location: user.location || "Peshawar, KP",
         carbonGoal: user.carbonGoal ?? 2.5,
+        points: user.points ?? 1280,
+        streak: user.streak ?? 3,
       },
     });
   } catch (error: any) {
@@ -49,7 +53,6 @@ export async function PUT(request: Request) {
 
     const cleanEmail = email.toLowerCase().trim();
 
-    // Check if user document exists
     const existingUser = await prisma.user.findUnique({
       where: { email: cleanEmail },
     });
@@ -76,6 +79,16 @@ export async function PUT(request: Request) {
       });
     }
 
+    // Auto-create notification for settings change
+    await prisma.notification.create({
+      data: {
+        userId: updatedUser.id,
+        title: "Profile & Settings Updated ⚙️",
+        message: "Your profile details and eco target settings were updated successfully.",
+        read: false,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       user: {
@@ -84,6 +97,8 @@ export async function PUT(request: Request) {
         email: updatedUser.email,
         location: updatedUser.location || "Peshawar, KP",
         carbonGoal: updatedUser.carbonGoal ?? 2.5,
+        points: updatedUser.points ?? 1280,
+        streak: updatedUser.streak ?? 3,
       },
     });
   } catch (error: any) {
@@ -91,4 +106,3 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

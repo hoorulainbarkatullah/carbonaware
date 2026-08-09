@@ -134,7 +134,7 @@ export default function SignInPage() {
           </div>
 
           <h2 className="text-2xl font-bold text-gray-900 mb-1">
-            Welcome Back! 👋
+            Welcome Back! 
           </h2>
           <p className="text-gray-500 text-sm mb-8">
             Sign in to continue your journey

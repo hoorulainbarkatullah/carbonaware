@@ -29,13 +29,22 @@ export async function POST(request: Request) {
     // Hash password using built-in sha256
     const passwordHash = crypto.createHash("sha256").update(password).digest("hex");
 
+    const role = email.toLowerCase().includes("admin") ? "admin" : "user";
+
     const newUser = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       passwordHash,
+      role,
+      status: "approved",
       location: "Peshawar, KP",
       carbonGoal: 2.5,
+      points: 1280,
+      streak: 3,
+      xp: 450,
+      level: 1,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     const result = await usersCollection.insertOne(newUser);
@@ -46,6 +55,7 @@ export async function POST(request: Request) {
         id: result.insertedId.toString(),
         name: newUser.name,
         email: newUser.email,
+        role: newUser.role,
         location: newUser.location,
         carbonGoal: newUser.carbonGoal,
       },

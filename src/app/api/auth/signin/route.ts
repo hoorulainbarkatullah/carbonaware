@@ -35,12 +35,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if user account is suspended
+    if (user.status === "suspended") {
+      return NextResponse.json(
+        { error: "Your account has been suspended by an administrator." },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       user: {
         id: user._id.toString(),
         name: user.name,
         email: user.email,
+        role: user.role || (user.email.includes("admin") ? "admin" : "user"),
         location: user.location || "Peshawar, KP",
         carbonGoal: user.carbonGoal || 2.5,
       },

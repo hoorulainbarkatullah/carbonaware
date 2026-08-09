@@ -7,11 +7,61 @@ import {
   calculateFoodEmission,
 } from "@/lib/calculator";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action, userId: reqUserId, transportData, foodData, calculationId } = body;
     const userId = reqUserId || "demo-user";
+
+    // Helper to award points and notification upon calculation completion
+    const onCalculationComplete = async (totalEmission: number, transportE: number, foodE: number) => {
+      try {
+        // Award 50 points to user
+        await prisma.user.updateMany({
+          where: { OR: [{ id: userId }, { email: userId }] },
+          data: { points: { increment: 50 } },
+        });
+
+        // Create notification
+        await prisma.notification.create({
+          data: {
+            userId,
+            title: "New Calculation Saved 🌿",
+            message: `Calculated total footprint: ${totalEmission} tons CO₂e (+50 Eco Points earned).`,
+            read: false,
+          },
+        });
+
+        // Auto-generate AI recommendations in MongoDB based on emissions
+        if (transportE > foodE) {
+          await (prisma as any).recommendation.create({
+            data: {
+              userId,
+              title: "Switch to Electric or Public Transit",
+              category: "Transport",
+              description: `Your transport emissions account for ${((transportE / totalEmission) * 100).toFixed(0)}% of your footprint. Using public transit 2 days/week saves ~0.6 tons CO₂/yr.`,
+              co2Savings: "-0.6 tons",
+              status: "Active",
+            },
+          });
+        } else {
+          await (prisma as any).recommendation.create({
+            data: {
+              userId,
+              title: "Adopt Plant-Rich Meals",
+              category: "Food",
+              description: `Food makes up ${((foodE / totalEmission) * 100).toFixed(0)}% of your footprint. Replacing red meat with plant-based options 3x/week lowers emissions significantly.`,
+              co2Savings: "-0.45 tons",
+              status: "Active",
+            },
+          });
+        }
+      } catch (e) {
+        console.error("Auto trigger error after calculation:", e);
+      }
+    };
 
     if (action === "transport") {
       const val = validateTransportInput(transportData);
@@ -21,7 +71,6 @@ export async function POST(request: Request) {
 
       const transportEmission = calculateTransportEmission(val.data);
 
-      // Check for duplicate recent calculation with identical transport data
       const recent = await prisma.carbonCalculation.findFirst({
         where: { userId },
         orderBy: { createdAt: "desc" },
@@ -40,7 +89,6 @@ export async function POST(request: Request) {
         });
       }
 
-      // If calculationId exists and record is incomplete, update it
       if (calculationId) {
         const existing = await prisma.carbonCalculation.findUnique({
           where: { id: calculationId },
@@ -57,7 +105,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Otherwise create new calculation entry
       const created = await prisma.carbonCalculation.create({
         data: {
           userId,
@@ -77,7 +124,6 @@ export async function POST(request: Request) {
 
       const foodEmission = calculateFoodEmission(val.data);
 
-      // Find active or recent calculation to update
       let calculationToUpdate = null;
       if (calculationId) {
         calculationToUpdate = await prisma.carbonCalculation.findUnique({
@@ -103,7 +149,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, calculation: updated });
       }
 
-      // If no calculation exists yet, create one with food data
       const created = await prisma.carbonCalculation.create({
         data: {
           userId,
@@ -137,7 +182,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // If updating an existing calculation record
       let targetId = calculationId;
       if (!targetId) {
         const recent = await prisma.carbonCalculation.findFirst({
@@ -162,6 +206,8 @@ export async function POST(request: Request) {
               totalEmission,
             },
           });
+
+          await onCalculationComplete(totalEmission, finalTEmission, finalFEmission);
           return NextResponse.json({ success: true, calculation: updated });
         }
       }
@@ -181,6 +227,7 @@ export async function POST(request: Request) {
         },
       });
 
+      await onCalculationComplete(totalEmission, finalTEmission, finalFEmission);
       return NextResponse.json({ success: true, calculation: created });
     }
 

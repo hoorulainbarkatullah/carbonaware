@@ -22,7 +22,8 @@ import {
   LayoutDashboard,
   LogOut,
   CheckCircle,
-  Clock
+  Clock,
+  ShieldAlert
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -38,7 +39,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<{ id?: string; name: string; email: string; location: string } | null>(null);
+  const [user, setUser] = useState<{ id?: string; name: string; email: string; location: string; role?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -86,6 +87,11 @@ export default function DashboardLayout({
           })
           .catch(() => {});
 
+        // Auto-redirect admin users directly to Admin Control Panel if on base dashboard route
+        const isUserAdmin = parsed.role === "admin" || (parsed.email && parsed.email.includes("admin"));
+        if (isUserAdmin && pathname === "/dashboard") {
+          router.replace("/dashboard/admin");
+        }
       } catch (err) {
         console.error("Failed to parse user session", err);
         router.replace("/signin");
@@ -98,7 +104,7 @@ export default function DashboardLayout({
     syncUserSession();
     window.addEventListener("userUpdated", syncUserSession);
     return () => window.removeEventListener("userUpdated", syncUserSession);
-  }, [router]);
+  }, [router, pathname]);
 
   // Outside clicks
   useEffect(() => {
@@ -146,18 +152,28 @@ export default function DashboardLayout({
       .toUpperCase();
   };
 
-  // Navigation Items
-  const navItems: NavItem[] = [
-    { label: "Dashboard", icon: Leaf, href: "/dashboard" },
-    { label: "Calculator", icon: Calculator, href: "/dashboard/calculator" },
-    { label: "History", icon: History, href: "/dashboard/history" },
-    { label: "AI Recommendations", icon: Lightbulb, href: "/dashboard/recommendations" },
-    { label: "Challenges", icon: Trophy, href: "/dashboard/challenges" },
-    { label: "Learning Hub", icon: BookOpen, href: "/dashboard/learning" },
-    { label: "Community", icon: Users, href: "/dashboard/community" },
-    { label: "Insights (For Orgs)", icon: BarChart3, href: "/dashboard/insights" },
-    { label: "Settings", icon: Settings, href: "/dashboard/settings" },
-  ];
+  const isAdminOrManager =
+    user?.role === "admin" ||
+    user?.role === "manager" ||
+    (user?.email && user.email.includes("admin"));
+
+  // Separate Navigation Items for Admin/Manager vs Standard User
+  const navItems: NavItem[] = isAdminOrManager
+    ? [
+        { label: "Admin Control Panel", icon: ShieldAlert, href: "/dashboard/admin" },
+        { label: "Insights (For Orgs)", icon: BarChart3, href: "/dashboard/insights" },
+        { label: "Settings", icon: Settings, href: "/dashboard/settings" },
+      ]
+    : [
+        { label: "Dashboard", icon: Leaf, href: "/dashboard" },
+        { label: "Calculator", icon: Calculator, href: "/dashboard/calculator" },
+        { label: "History", icon: History, href: "/dashboard/history" },
+        { label: "AI Recommendations", icon: Lightbulb, href: "/dashboard/recommendations" },
+        { label: "Challenges", icon: Trophy, href: "/dashboard/challenges" },
+        { label: "Learning Hub", icon: BookOpen, href: "/dashboard/learning" },
+        { label: "Community", icon: Users, href: "/dashboard/community" },
+        { label: "Settings", icon: Settings, href: "/dashboard/settings" },
+      ];
 
   // Dynamic header details based on path and user name
   const getHeaderDetails = () => {
@@ -203,13 +219,19 @@ export default function DashboardLayout({
       case "/dashboard/learning":
         return {
           title: "Learning Hub",
-          subtitle: "Grow your sustainability knowledge and offset skills.",
+          subtitle: "Learn, discuss and take action for a greener tomorrow.",
           isWelcome: false
         };
       case "/dashboard/community":
         return {
           title: "Community Portal",
           subtitle: "Engage with Peshawar local clean air initiatives.",
+          isWelcome: false
+        };
+      case "/dashboard/admin":
+        return {
+          title: "Administrator Control Panel 🛡️",
+          subtitle: "Manage platform users, learning content, challenges, and system metrics.",
           isWelcome: false
         };
       default:

@@ -17,16 +17,42 @@ import {
   Zap,
   Check,
   TrendingUp,
-  Globe
+  Globe,
+  X,
+  AlertCircle,
+  BookOpen,
+  RotateCcw
 } from "lucide-react";
 
 export default function ChallengesPage() {
   const [activeTab, setActiveTab] = useState<"active" | "completed" | "leaderboard">("active");
+  const [leaderboardFilter, setLeaderboardFilter] = useState<"weekly" | "monthly" | "all">("all");
+
+  // Quiz & Detail Modal states
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [userAnswers, setUserAnswers] = useState<number[]>([]);
+  const [quizResult, setQuizResult] = useState<{
+    score: number;
+    passed: boolean;
+    earnedPoints: number;
+    earnedXp: number;
+  } | null>(null);
+  const [submittingQuiz, setSubmittingQuiz] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>({
     points: 1280,
+    xp: 450,
+    level: 1,
     streak: 3,
+    challenges: [],
+    featuredChallenge: null,
     progress: {
       completedQuestions: 3,
       totalQuestions: 10,
@@ -39,39 +65,34 @@ export default function ChallengesPage() {
       { id: "b3", name: "Eco Expert", req: "Score 90% or more", color: "purple", unlocked: false },
       { id: "b4", name: "Eco Champion", req: "Score 100%", color: "amber", unlocked: false },
     ],
-    leaderboard: [
-      { rank: 1, name: "Sara Khan", points: 1450, location: "Peshawar, KP", isUser: false },
-      { rank: 2, name: "Ali Khan (You)", points: 1280, location: "Peshawar, KP", isUser: true },
-      { rank: 3, name: "Hamza Bilal", points: 1120, location: "Lahore, PB", isUser: false },
-      { rank: 4, name: "Ayesha Noor", points: 980, location: "Islamabad, ICT", isUser: false },
-      { rank: 5, name: "Bilal Ahmed", points: 850, location: "Karachi, SD", isUser: false },
-    ],
+    leaderboard: [],
     stats: {
       challengesCompleted: 2,
       averageScore: 85,
       currentStreak: 3,
     },
-    completedChallenges: [
-      { id: "cc1", title: "No Car Day Challenge", category: "Transport", points: 150, completedDate: "12 May 2026" },
-      { id: "cc2", title: "Zero Plastic Week", category: "Lifestyle", points: 200, completedDate: "04 June 2026" },
-    ],
+    completedChallenges: [],
   });
+
+  const getUserId = () => {
+    let uid = "demo-user";
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          uid = u.id || u.email || uid;
+        } catch (e) {}
+      }
+    }
+    return uid;
+  };
 
   const fetchChallenges = async () => {
     try {
       setLoading(true);
-      let uid = "demo-user";
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("user");
-        if (stored) {
-          try {
-            const u = JSON.parse(stored);
-            uid = u.id || u.email;
-          } catch (e) {}
-        }
-      }
-
-      const res = await fetch(`/api/challenges?userId=${encodeURIComponent(uid)}`);
+      const uid = getUserId();
+      const res = await fetch(`/api/challenges?userId=${encodeURIComponent(uid)}&timeframe=${leaderboardFilter}`);
       if (res.ok) {
         const result = await res.json();
         if (result.success && result.data) {
@@ -87,35 +108,113 @@ export default function ChallengesPage() {
 
   useEffect(() => {
     fetchChallenges();
-  }, []);
+  }, [leaderboardFilter]);
 
-  const handleStartOrContinueQuiz = async () => {
-    try {
-      let uid = "demo-user";
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("user");
-        if (stored) {
-          try {
-            const u = JSON.parse(stored);
-            uid = u.id || u.email;
-          } catch (e) {}
+  const openQuizModal = async (challengeItem?: any) => {
+    const target = challengeItem || data.featuredChallenge || data.challenges[0];
+    setSelectedChallenge(target);
+    setIsQuizModalOpen(true);
+    setCurrentQIndex(0);
+    setSelectedOption(null);
+    setUserAnswers([]);
+    setQuizResult(null);
+
+    // Fetch dynamic questions for selected challenge from MongoDB
+    if (target?.id) {
+      try {
+        setLoadingQuestions(true);
+        const uid = getUserId();
+        const res = await fetch(`/api/challenges?userId=${encodeURIComponent(uid)}&challengeId=${target.id}`);
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.questions && resData.questions.length > 0) {
+            setQuizQuestions(resData.questions);
+          } else {
+            // fallback questions if db questions not loaded
+            setQuizQuestions([
+              {
+                id: "q1",
+                question: "Which sector is typically the largest contributor to personal carbon footprints?",
+                options: ["Transportation and fossil fuel travel", "Digital messaging and emails", "Clothing manufacturing", "Paper consumption"],
+                correctIndex: 0,
+                explanation: "Transportation makes up over 40% of an average individual's carbon footprint.",
+              },
+              {
+                id: "q2",
+                question: "How many kilograms of CO₂ are emitted per liter of gasoline burned?",
+                options: ["0.5 kg", "2.31 kg", "5.0 kg", "10.2 kg"],
+                correctIndex: 1,
+                explanation: "Burning 1 liter of gasoline releases ~2.31 kg of CO₂.",
+              },
+            ]);
+          }
         }
+      } catch (e) {
+        console.error("Error fetching questions:", e);
+      } finally {
+        setLoadingQuestions(false);
       }
-
-      const res = await fetch("/api/challenges", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: uid, action: "progress" }),
-      });
-
-      if (res.ok) {
-        fetchChallenges();
-      }
-    } catch (err) {
-      console.error("Failed to advance quiz:", err);
     }
   };
 
+  const handleSelectOption = (idx: number) => {
+    setSelectedOption(idx);
+  };
+
+  const handleNextQuestion = () => {
+    if (selectedOption === null) return;
+    const nextAnswers = [...userAnswers, selectedOption];
+    setUserAnswers(nextAnswers);
+
+    if (currentQIndex < quizQuestions.length - 1) {
+      setCurrentQIndex(currentQIndex + 1);
+      setSelectedOption(null);
+    } else {
+      // Calculate score
+      let correct = 0;
+      nextAnswers.forEach((ans, idx) => {
+        if (ans === quizQuestions[idx].correctIndex) correct++;
+      });
+      const calculatedScore = Math.round((correct / quizQuestions.length) * 100);
+      submitQuizResults(calculatedScore, nextAnswers);
+    }
+  };
+
+  const submitQuizResults = async (score: number, answers: number[]) => {
+    setSubmittingQuiz(true);
+    try {
+      const uid = getUserId();
+      const res = await fetch("/api/challenges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: uid,
+          action: "submit_quiz",
+          challengeId: selectedChallenge?.id || data.featuredChallenge?.id,
+          score: score,
+          userAnswers: answers,
+        }),
+      });
+
+      if (res.ok) {
+        const resData = await res.json();
+        setQuizResult({
+          score: score,
+          passed: resData.passed,
+          earnedPoints: resData.earnedPoints || 0,
+          earnedXp: resData.earnedXp || 0,
+        });
+        fetchChallenges();
+        window.dispatchEvent(new Event("userUpdated"));
+      }
+    } catch (err) {
+      console.error("Failed to submit quiz results:", err);
+    } finally {
+      setSubmittingQuiz(false);
+    }
+  };
+
+  const activeChallenge = selectedChallenge || data.featuredChallenge || data.challenges[0];
   const completedQuestions = data.progress?.completedQuestions ?? 3;
   const totalQuestions = data.progress?.totalQuestions ?? 10;
   const progressPct = Math.round((completedQuestions / totalQuestions) * 100);
@@ -203,14 +302,16 @@ export default function ChallengesPage() {
                     </span>
                     <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-150 shadow-sm">
                       <Clock className="w-3 h-3 text-emerald-600" />
-                      Ends in 6d 12h 30m
+                      {data.featuredChallenge?.deadline || "Ends in 6d 12h 30m"}
                     </span>
                   </div>
 
                   <div>
-                    <h3 className="text-xl font-black text-gray-900 leading-tight">Eco Quiz Challenge</h3>
+                    <h3 className="text-xl font-black text-gray-900 leading-tight">
+                      {data.featuredChallenge?.title || "Eco Quiz Challenge"}
+                    </h3>
                     <p className="text-xs text-gray-500 font-medium leading-relaxed mt-1">
-                      Test your knowledge about climate change, sustainability, and eco-friendly living.
+                      {data.featuredChallenge?.description || "Test your knowledge about climate change, sustainability, and eco-friendly living."}
                     </p>
                   </div>
 
@@ -218,15 +319,15 @@ export default function ChallengesPage() {
                   <div className="flex items-center gap-4 text-xs font-bold text-gray-600 pt-1">
                     <div className="flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>10 Questions</span>
+                      <span>{data.featuredChallenge?.totalQuestions || 10} Questions</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-gray-400" />
-                      <span>5 min</span>
+                      <span>{data.featuredChallenge?.estimatedTime || "5 min"}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-amber-600">
                       <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
-                      <span className="font-extrabold">100 Points</span>
+                      <span className="font-extrabold">{data.featuredChallenge?.rewardPoints || 100} Points</span>
                     </div>
                   </div>
                 </div>
@@ -234,13 +335,40 @@ export default function ChallengesPage() {
                 {/* Start / Continue Button */}
                 <div className="self-stretch md:self-center flex items-center">
                   <button
-                    onClick={handleStartOrContinueQuiz}
+                    onClick={() => openQuizModal(data.featuredChallenge)}
                     className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-xl shadow-md transition cursor-pointer text-xs whitespace-nowrap text-center"
                   >
-                    {completedQuestions === 0 ? "Start Quiz" : completedQuestions >= 10 ? "Retake Quiz" : "Continue Quiz"}
+                    Start Quiz
                   </button>
                 </div>
               </div>
+
+              {/* ALL AVAILABLE CHALLENGES SELECTION LIST */}
+              {data.challenges && data.challenges.length > 1 && (
+                <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-3">
+                  <h4 className="text-xs font-black text-gray-900">Explore More Challenges</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {data.challenges.map((c: any) => (
+                      <div
+                        key={c.id}
+                        onClick={() => openQuizModal(c)}
+                        className="p-3.5 rounded-xl border border-gray-150 hover:border-emerald-300 hover:bg-emerald-50/30 transition cursor-pointer flex items-center justify-between space-x-3 group"
+                      >
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                            {c.category} • {c.difficulty}
+                          </span>
+                          <h5 className="text-xs font-black text-gray-900 group-hover:text-emerald-700 transition">
+                            {c.title}
+                          </h5>
+                          <p className="text-[10px] text-gray-400 line-clamp-1">{c.description}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* YOUR PROGRESS CARD */}
               <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-3">
@@ -259,7 +387,7 @@ export default function ChallengesPage() {
                 </div>
 
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold pt-1">
-                  <span>💡 Keep going! Complete the quiz to earn 100 points.</span>
+                  <span>💡 Keep going! Complete the quiz to earn {data.featuredChallenge?.rewardPoints || 100} points.</span>
                 </div>
               </div>
 
@@ -275,7 +403,7 @@ export default function ChallengesPage() {
                     </div>
                     <h5 className="text-xs font-bold text-gray-800">Start the Quiz</h5>
                     <p className="text-[10px] text-gray-400 leading-relaxed font-medium">
-                      Answer 10 multiple choice questions.
+                      Answer multiple choice questions.
                     </p>
                   </div>
 
@@ -286,7 +414,7 @@ export default function ChallengesPage() {
                     </div>
                     <h5 className="text-xs font-bold text-gray-800">Score Points</h5>
                     <p className="text-[10px] text-gray-400 leading-relaxed font-medium">
-                      Get 10 points for each correct answer.
+                      Get points & XP for each correct answer.
                     </p>
                   </div>
 
@@ -316,7 +444,7 @@ export default function ChallengesPage() {
                       <div>
                         <span className="font-extrabold text-gray-800 block">Topics Covered</span>
                         <span className="text-gray-500 text-[11px] font-medium leading-relaxed">
-                          Climate change, renewable energy, waste management, sustainable living and more.
+                          {data.featuredChallenge?.topicsCovered || "Climate change, renewable energy, waste management, sustainable living and more."}
                         </span>
                       </div>
                     </div>
@@ -340,7 +468,7 @@ export default function ChallengesPage() {
                       <div>
                         <span className="font-extrabold text-gray-800 block">Reward</span>
                         <span className="text-gray-500 text-[11px] font-medium leading-relaxed">
-                          100 points + Chance to earn exclusive badges.
+                          {data.featuredChallenge?.rewardPoints || 100} points + {data.featuredChallenge?.xpReward || 150} XP + Chance to earn exclusive badges.
                         </span>
                       </div>
                     </div>
@@ -361,7 +489,7 @@ export default function ChallengesPage() {
             <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-4">
               <h4 className="text-sm font-extrabold text-gray-900">Completed Challenges Log</h4>
               <div className="space-y-3">
-                {data.completedChallenges.map((item: any) => (
+                {data.completedChallenges?.map((item: any) => (
                   <div key={item.id} className="p-4 rounded-xl border border-gray-150 flex items-center justify-between bg-emerald-50/20">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
@@ -369,23 +497,64 @@ export default function ChallengesPage() {
                       </div>
                       <div>
                         <h5 className="text-xs font-black text-gray-900">{item.title}</h5>
-                        <p className="text-[10px] text-gray-400 font-semibold">{item.category} • Completed on {item.completedDate}</p>
+                        <p className="text-[10px] text-gray-400 font-semibold">
+                          {item.category} • Score: {item.score}% • Completed on {item.completedDate}
+                        </p>
                       </div>
                     </div>
-                    <span className="text-xs font-black text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
-                      +{item.points} Points
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
+                        +{item.points} Points
+                      </span>
+                    </div>
                   </div>
                 ))}
+
+                {(!data.completedChallenges || data.completedChallenges.length === 0) && (
+                  <div className="py-8 text-center text-gray-400 font-semibold text-xs">
+                    No completed challenges yet. Complete a quiz to log your achievements!
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {activeTab === "leaderboard" && (
             <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-4">
-              <h4 className="text-sm font-extrabold text-gray-900">Regional Leaderboard Rankings</h4>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <h4 className="text-sm font-extrabold text-gray-900">Regional Leaderboard Rankings</h4>
+                
+                {/* Weekly / Monthly / All Time Filter */}
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-[10px] font-extrabold">
+                  <button
+                    onClick={() => setLeaderboardFilter("weekly")}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      leaderboardFilter === "weekly" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    Weekly
+                  </button>
+                  <button
+                    onClick={() => setLeaderboardFilter("monthly")}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      leaderboardFilter === "monthly" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setLeaderboardFilter("all")}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                      leaderboardFilter === "all" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    All Time
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                {data.leaderboard.map((item: any) => (
+                {data.leaderboard?.map((item: any) => (
                   <div
                     key={item.rank}
                     className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold transition ${
@@ -398,7 +567,12 @@ export default function ChallengesPage() {
                         {item.name.substring(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <span className="block">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="block">{item.name}</span>
+                          <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.5 rounded">
+                            Lvl {item.level}
+                          </span>
+                        </div>
                         <span className="text-[10px] text-gray-400 font-medium">{item.location}</span>
                       </div>
                     </div>
@@ -427,41 +601,36 @@ export default function ChallengesPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {/* Badge 1: Eco Beginner */}
-              <div className="bg-emerald-50/30 border border-emerald-100 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                  <CheckCircle className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-black text-gray-900 leading-tight">Eco Beginner</span>
-                <span className="text-[9px] text-gray-400 font-bold">Score 70% or more</span>
-              </div>
+              {data.badges.map((b: any) => {
+                const getIcon = () => {
+                  if (b.name.includes("Beginner")) return <CheckCircle className="w-6 h-6" />;
+                  if (b.name.includes("Explorer")) return <Globe className="w-6 h-6" />;
+                  if (b.name.includes("Expert")) return <Shield className="w-6 h-6" />;
+                  return <Trophy className="w-6 h-6" />;
+                };
 
-              {/* Badge 2: Eco Explorer */}
-              <div className="bg-blue-50/30 border border-blue-100 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                  <Globe className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-black text-gray-900 leading-tight">Eco Explorer</span>
-                <span className="text-[9px] text-gray-400 font-bold">Score 80% or more</span>
-              </div>
+                const getColor = () => {
+                  if (b.color === "emerald") return "bg-emerald-50/30 border-emerald-100 text-emerald-600 bg-emerald-100";
+                  if (b.color === "blue") return "bg-blue-50/30 border-blue-100 text-blue-600 bg-blue-100";
+                  if (b.color === "purple") return "bg-purple-50/30 border-purple-100 text-purple-600 bg-purple-100";
+                  return "bg-amber-50/30 border-amber-100 text-amber-600 bg-amber-100";
+                };
 
-              {/* Badge 3: Eco Expert */}
-              <div className="bg-purple-50/30 border border-purple-100 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 opacity-80">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-                  <Shield className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-black text-gray-900 leading-tight">Eco Expert</span>
-                <span className="text-[9px] text-gray-400 font-bold">Score 90% or more</span>
-              </div>
-
-              {/* Badge 4: Eco Champion */}
-              <div className="bg-amber-50/30 border border-amber-100 p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 opacity-80">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
-                  <Trophy className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-black text-gray-900 leading-tight">Eco Champion</span>
-                <span className="text-[9px] text-gray-400 font-bold">Score 100%</span>
-              </div>
+                return (
+                  <div
+                    key={b.id}
+                    className={`border p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 ${
+                      b.unlocked ? getColor() : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${b.unlocked ? "" : "bg-gray-200 text-gray-400"}`}>
+                      {getIcon()}
+                    </div>
+                    <span className="text-xs font-black text-gray-900 leading-tight">{b.name}</span>
+                    <span className="text-[9px] text-gray-400 font-bold">{b.req}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -478,7 +647,7 @@ export default function ChallengesPage() {
                   </div>
                   <span className="text-gray-700">Challenges Completed</span>
                 </div>
-                <span className="text-gray-900 font-black">{data.stats.challengesCompleted}</span>
+                <span className="text-gray-900 font-black">{data.stats?.challengesCompleted || 0}</span>
               </div>
 
               {/* Average Score */}
@@ -489,7 +658,7 @@ export default function ChallengesPage() {
                   </div>
                   <span className="text-gray-700">Average Score</span>
                 </div>
-                <span className="text-gray-900 font-black">{data.stats.averageScore}%</span>
+                <span className="text-gray-900 font-black">{data.stats?.averageScore || 85}%</span>
               </div>
 
               {/* Current Streak */}
@@ -500,7 +669,7 @@ export default function ChallengesPage() {
                   </div>
                   <span className="text-gray-700">Current Streak</span>
                 </div>
-                <span className="text-gray-900 font-black">{data.stats.currentStreak} Days</span>
+                <span className="text-gray-900 font-black">{data.stats?.currentStreak || 3} Days</span>
               </div>
             </div>
           </div>
@@ -521,6 +690,155 @@ export default function ChallengesPage() {
         </div>
 
       </div>
+
+      {/* ================= INTERACTIVE QUIZ MODAL ================= */}
+      {isQuizModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-lg w-full p-6 relative animate-fadeIn space-y-4">
+            
+            <button
+              onClick={() => setIsQuizModalOpen(false)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {loadingQuestions ? (
+              <div className="py-12 text-center text-xs font-bold text-gray-400 space-y-2">
+                <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p>Loading questions from MongoDB...</p>
+              </div>
+            ) : quizResult === null ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">
+                      {activeChallenge?.title || "Sustainability Quiz"}
+                    </span>
+                    <h3 className="text-sm font-black text-gray-900">
+                      Question {currentQIndex + 1} of {quizQuestions.length}
+                    </h3>
+                  </div>
+                  <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                    +{activeChallenge?.rewardPoints || 100} Points
+                  </span>
+                </div>
+
+                {/* MODAL QUESTION PROGRESS BAR */}
+                <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.round(((currentQIndex + 1) / (quizQuestions.length || 1)) * 100)}%` }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-800 leading-relaxed">
+                    {quizQuestions[currentQIndex]?.question}
+                  </p>
+
+                  <div className="space-y-2 pt-2">
+                    {quizQuestions[currentQIndex]?.options.map((opt: string, idx: number) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectOption(idx)}
+                        className={`w-full text-left p-3 rounded-xl border text-xs font-semibold transition cursor-pointer flex items-center justify-between ${
+                          selectedOption === idx
+                            ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        <span>{opt}</span>
+                        {selectedOption === idx && (
+                          <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2">
+                  {currentQIndex > 0 ? (
+                    <button
+                      onClick={() => {
+                        const prevIdx = currentQIndex - 1;
+                        setCurrentQIndex(prevIdx);
+                        setSelectedOption(userAnswers[prevIdx] ?? null);
+                      }}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                  ) : <div />}
+
+                  <button
+                    disabled={selectedOption === null || submittingQuiz}
+                    onClick={handleNextQuestion}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-sm transition cursor-pointer flex items-center gap-2"
+                  >
+                    {submittingQuiz ? (
+                      <span>Saving attempt...</span>
+                    ) : currentQIndex === quizQuestions.length - 1 ? (
+                      "Submit Quiz"
+                    ) : (
+                      "Next Question"
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 space-y-4">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl border border-emerald-200">
+                  {quizResult.passed ? "🏆" : "💡"}
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">
+                    {quizResult.passed ? "Challenge Passed!" : "Attempt Recorded"}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium mt-1">
+                    You scored <span className="font-extrabold text-emerald-600">{quizResult.score}%</span> on {activeChallenge?.title}.
+                  </p>
+                </div>
+
+                {quizResult.passed ? (
+                  <div className="bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl text-xs font-bold text-emerald-900 space-y-1">
+                    <p>🎉 +{quizResult.earnedPoints} Points & +{quizResult.earnedXp} XP awarded!</p>
+                    <p className="text-[10px] text-emerald-700 font-normal">
+                      Badge & completion status updated in your MongoDB profile.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-100 p-3.5 rounded-xl text-xs font-bold text-amber-900 space-y-1">
+                    <p>Passing score is {activeChallenge?.passingScore || 70}%.</p>
+                    <p className="text-[10px] text-amber-700 font-normal">
+                      Attempt saved in MongoDB. Review the topics and retry anytime!
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-center gap-3 pt-2">
+                  {!quizResult.passed && (
+                    <button
+                      onClick={() => openQuizModal(activeChallenge)}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-extrabold px-5 py-2.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Retry Quiz
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsQuizModalOpen(false)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-sm transition cursor-pointer"
+                  >
+                    View Leaderboard & Badges
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -19,8 +19,14 @@ model User {
   carbonGoal   Float?   @default(2.5)
   points       Int      @default(1280)
   streak       Int      @default(3)
+  xp           Int      @default(450)
+  level        Int      @default(1)
+  role         String   @default("user") // "user" | "admin"
+  status       String   @default("approved") // "approved" | "suspended" | "pending"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@map("users")
 }
 
 model CarbonCalculation {
@@ -45,40 +51,171 @@ model Notification {
 }
 
 model Challenge {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  title       String
-  description String
-  questions   Int      @default(10)
-  durationMin Int      @default(5)
-  points      Int      @default(100)
-  endsIn      String   @default("6d 12h 30m")
-  category    String   @default("Quiz")
-  createdAt   DateTime @default(now())
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  description      String
+  fullDescription String?
+  difficulty       String   @default("Medium")
+  category         String   @default("Quiz")
+  estimatedTime    String   @default("5 min")
+  rewardPoints     Int      @default(100)
+  xpReward         Int      @default(150)
+  badgeReward      String?  @default("Eco Beginner")
+  topicsCovered    String   @default("Climate change, sustainability, and eco-friendly living.")
+  rules            String?  @default("Answer all questions carefully. Score 70% or higher to pass and unlock rewards.")
+  totalQuestions   Int      @default(10)
+  passingScore     Int      @default(70)
+  deadline         String   @default("Ends in 6d 12h 30m")
+  status           String   @default("Active")
+  isFeatured       Boolean  @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime? @updatedAt
+}
+
+model ChallengeQuestion {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  challengeId   String
+  question      String
+  options       String[]
+  correctIndex  Int
+  explanation   String?
+  createdAt     DateTime @default(now())
+}
+
+model ChallengeAttempt {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String
+  challengeId  String
+  score        Int
+  passed       Boolean
+  answers      Int[]
+  earnedPoints Int      @default(0)
+  earnedXp     Int      @default(0)
+  createdAt    DateTime @default(now())
 }
 
 model UserChallengeProgress {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String
-  challengeId       String
-  completedQuestions Int     @default(0)
-  totalQuestions    Int      @default(10)
-  score             Int      @default(0)
-  isCompleted       Boolean  @default(false)
-  updatedAt         DateTime @updatedAt
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String
+  challengeId        String
+  completedQuestions Int      @default(0)
+  totalQuestions     Int      @default(10)
+  score              Int      @default(0)
+  isCompleted        Boolean  @default(false)
+  attempts           Int      @default(0)
+  updatedAt          DateTime @updatedAt
 }
 
 model Badge {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
+  name        String   @unique
   description String
-  icon        String
-  scoreReq    Int
+  scoreReq    Int      @default(70)
+  icon        String   @default("CheckCircle")
+  color       String   @default("emerald")
   createdAt   DateTime @default(now())
 }
 
 model UserBadge {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String
+  badgeId    String
+  earnedDate DateTime? @default(now())
+  unlockedAt DateTime? @default(now())
+}
+
+// --- LEARNING HUB MODELS ---
+
+model UserLearningProgress {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @unique
+  topicsCompleted    Int      @default(0)
+  lessonsCompleted   Int      @default(0)
+  certificatesEarned Int      @default(0)
+  progressPercentage Int      @default(0)
+  completedTopicIds  String[] @default([])
+  completedLessonIds String[] @default([])
+  updatedAt          DateTime @updatedAt
+}
+
+model LearningTopic {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  slug             String   @unique
+  description      String
+  lessonsCount     Int      @default(10)
+  category         String
+  icon             String   // Icon key
+  discussionsCount Int      @default(0)
+  createdAt        DateTime @default(now())
+}
+
+model Lesson {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  topicId     String
+  title       String
+  content     String
+  duration    String   @default("5 min")
+  order       Int      @default(1)
+  points      Int      @default(20)
+  createdAt   DateTime @default(now())
+}
+
+model Question {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  title         String
+  description   String
+  author        String
+  authorImage   String?
+  userId        String?
+  topic         String
+  difficultyTag String   @default("Beginner")
+  likes         Int      @default(0)
+  replies       Int      @default(0)
+  views         Int      @default(0)
+  solved        Boolean  @default(false)
+  categoryTab   String   @default("Recent")
+  createdAt     DateTime @default(now())
+}
+
+model Answer {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  questionId String
+  author     String
+  userId     String?
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model Certificate {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
-  badgeId   String
-  unlockedAt DateTime @default(now())
+  title     String
+  topicId   String?
+  issuedAt  DateTime @default(now())
+}
+
+model CommunityLeaderboard {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  profileImage   String?
+  badge          String
+  subTitle       String
+  points         Int      @default(100)
+  rank           Int      @default(1)
+  createdAt      DateTime @default(now())
+}
+
+// --- RECOMMENDATIONS MODEL ---
+
+model Recommendation {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String
+  title       String
+  category    String   // "Transport" | "Food" | "General"
+  description String
+  co2Savings  String
+  status      String   @default("Active") // "Active" | "Completed" | "Ignored"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Leaf,
   ChevronDown,
@@ -11,6 +12,9 @@ import {
   Share2,
   Car,
   Zap,
+  BookOpen,
+  Trophy,
+  Award
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -46,139 +50,82 @@ export default function DashboardPage() {
     { name: "Others", pct: 10, val: 0.24, color: "#a855f7" },
   ]);
 
+  // Real Dynamic Widgets State from MongoDB
+  const [badges, setBadges] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [challenges, setChallenges] = useState<any[]>([]);
+  const [learningWidget, setLearningWidget] = useState<any>({
+    title: "What is Carbon Footprint?",
+    desc: "Learn the basics of carbon footprint and its impact on climate change.",
+    progress: 75,
+  });
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      let uid: string | undefined = undefined;
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          try {
+            const u = JSON.parse(stored);
+            uid = u.id || u.email;
+            setUserName(u.name || "Ali Khan");
+            const initials = (u.name || "Ali Khan")
+              .split(" ")
+              .map((n: string) => n[0])
+              .join("")
+              .substring(0, 2)
+              .toUpperCase();
+            setUserInitials(initials);
+          } catch (e) {}
+        }
+      }
+
+      const url = uid
+        ? `/api/dashboard/stats?userId=${encodeURIComponent(uid)}&timeframe=${encodeURIComponent(leaderboardTime)}`
+        : `/api/dashboard/stats?timeframe=${encodeURIComponent(leaderboardTime)}`;
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setHasData(data.hasData);
+          if (data.latest) {
+            setTotalEmission(data.latest.totalEmission);
+            setTransportEmission(data.latest.transportEmission);
+            setFoodEmission(data.latest.foodEmission);
+          }
+          if (data.monthlyAverage !== undefined) setMonthlyAverage(data.monthlyAverage);
+          if (data.percentageChange !== undefined) setPercentageChange(data.percentageChange);
+          if (data.totalCalculations !== undefined) setTotalCalculationsCount(data.totalCalculations);
+          if (data.lineChartData && data.lineChartData.length > 0) setLineChartData(data.lineChartData);
+          if (data.breakdownData && data.breakdownData.length > 0) setBreakdownData(data.breakdownData);
+
+          if (data.badges && data.badges.length > 0) setBadges(data.badges);
+          if (data.leaderboard && data.leaderboard.length > 0) setLeaderboard(data.leaderboard);
+          if (data.recommendations && data.recommendations.length > 0) setRecommendations(data.recommendations);
+          if (data.activeChallenges && data.activeChallenges.length > 0) setChallenges(data.activeChallenges);
+          if (data.learningHubWidget) setLearningWidget(data.learningHubWidget);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch dashboard stats:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
-        const u = JSON.parse(storedUser);
-        setUserName(u.name);
-        const initials = u.name
-          .split(" ")
-          .map((n: string) => n[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase();
-        setUserInitials(initials);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    async function fetchDashboardStats() {
-      try {
-        setLoading(true);
-        let uid: string | undefined = undefined;
-        if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("user");
-          if (stored) {
-            try {
-              const u = JSON.parse(stored);
-              uid = u.id || u.email;
-            } catch (e) {}
-          }
-        }
-
-        const url = uid ? `/api/dashboard/stats?userId=${encodeURIComponent(uid)}` : "/api/dashboard/stats";
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            setHasData(data.hasData);
-            if (data.latest) {
-              setTotalEmission(data.latest.totalEmission);
-              setTransportEmission(data.latest.transportEmission);
-              setFoodEmission(data.latest.foodEmission);
-            }
-            if (data.monthlyAverage !== undefined) setMonthlyAverage(data.monthlyAverage);
-            if (data.percentageChange !== undefined) setPercentageChange(data.percentageChange);
-            if (data.totalCalculations !== undefined) setTotalCalculationsCount(data.totalCalculations);
-            if (data.lineChartData && data.lineChartData.length > 0) setLineChartData(data.lineChartData);
-            if (data.breakdownData && data.breakdownData.length > 0) setBreakdownData(data.breakdownData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch dashboard stats:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchDashboardStats();
-  }, []);
 
-  // Leaderboard data
-  const leaderboard = [
-    { rank: 1, name: "Sara Khan", points: 1200, avatar: "SK", isUser: false },
-    { rank: 2, name: `${userName} (You)`, points: Math.max(100 * totalCalculationsCount, 950), avatar: userInitials, isUser: true },
-    { rank: 3, name: "Hamza Bilal", points: 870, avatar: "HB", isUser: false },
-    { rank: 4, name: "Ayesha Noor", points: 760, avatar: "AN", isUser: false },
-    { rank: 5, name: "Bilal Ahmed", points: 600, avatar: "BA", isUser: false },
-  ];
-
-  // Active Challenges data
-  const challenges = [
-    {
-      title: "No Car Day",
-      desc: "Use no private vehicle",
-      progress: 60,
-      daysLeft: 3,
-      color: "bg-[#22c55e]",
-      icon: <Car className="w-5 h-5 text-red-500" />,
-      iconBg: "bg-red-50",
-      border: "border-red-100"
-    },
-    {
-      title: "Reduce Energy by 15%",
-      desc: "Reduce electricity usage",
-      progress: 40,
-      daysLeft: 7,
-      color: "bg-amber-500",
-      icon: <Zap className="w-5 h-5 text-amber-500" />,
-      iconBg: "bg-amber-50",
-      border: "border-amber-100"
-    },
-    {
-      title: "Go Green This Week",
-      desc: "Adopt 3 eco-friendly habits",
-      progress: 20,
-      daysLeft: 5,
-      color: "bg-purple-500",
-      icon: <Leaf className="w-5 h-5 text-purple-500" />,
-      iconBg: "bg-purple-50",
-      border: "border-purple-100"
-    }
-  ];
-
-  // AI Recommendations
-  const recommendations = [
-    {
-      title: "Use public transport 2x more",
-      desc: "Could reduce 120 kg CO₂e/month",
-      icon: <Car className="w-5 h-5 text-[#16a34a]" />,
-      iconBg: "bg-[#dcfce7]",
-    },
-    {
-      title: "Reduce electricity usage at night",
-      desc: "Could reduce 80 kg CO₂e/month",
-      icon: <Zap className="w-5 h-5 text-amber-500" />,
-      iconBg: "bg-amber-50",
-    },
-    {
-      title: "Try 2 more vegetarian meals weekly",
-      desc: "Could reduce 60 kg CO₂e/month",
-      icon: <Leaf className="w-5 h-5 text-[#16a34a]" />,
-      iconBg: "bg-[#dcfce7]",
-    },
-  ];
-
-  // Badges data dynamically calculated based on calculation count
-  const badges = [
-    { name: "Eco Starter", desc: "First calculation", active: totalCalculationsCount >= 1, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
-    { name: "Consistent Tracker", desc: "Track for 4 weeks", active: totalCalculationsCount >= 4, color: "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]" },
-    { name: "Green Achiever", desc: "Reduce footprint by 10%", active: percentageChange < 0, color: "bg-blue-50 text-blue-700 border-blue-100" },
-    { name: "Climate Saver", desc: "Save 500kg CO₂e", active: false, locked: true },
-    { name: "Planet Guardian", desc: "Complete 10 challenges", active: false, locked: true },
-  ];
+    const handleUserUpdated = () => {
+      fetchDashboardStats();
+    };
+    window.addEventListener("userUpdated", handleUserUpdated);
+    return () => window.removeEventListener("userUpdated", handleUserUpdated);
+  }, [leaderboardTime]);
 
   // Chart rendering math
   const chartWidth = 500;
@@ -198,104 +145,106 @@ export default function DashboardPage() {
   });
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaPath = points.length > 0 ? `
-    ${linePath} 
-    L ${points[points.length - 1].x} ${chartHeight - paddingBottom} 
-    L ${points[0].x} ${chartHeight - paddingBottom} 
-    Z
-  ` : "";
 
-  // Compute donut segment arcs
-  let accumulatedAngle = 0;
-  const radius = 50;
-  const cx = 60;
-  const cy = 60;
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${chartHeight - paddingBottom} L ${points[0].x} ${chartHeight - paddingBottom} Z`
+    : "";
+
   const strokeWidth = 14;
+  const radius = 42;
   const circ = 2 * Math.PI * radius;
+  const cx = 56;
+  const cy = 56;
+
+  let accumulatedAngle = 0;
 
   return (
     <div className="flex flex-col space-y-6">
-      {/* ================= DASHBOARD GRID ================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+      {/* TOP METRICS CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        {/* LEFT 2 COLUMNS FOR MAIN WIDGETS */}
-        <div className="xl:col-span-2 flex flex-col space-y-6">
+        {/* CARD 1: LATEST FOOTPRINT */}
+        <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between h-[150px] relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                Latest Footprint
+              </span>
+              <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none">
+                {totalEmission.toFixed(2)} <span className="text-sm font-extrabold text-gray-500">tons CO₂e</span>
+              </h2>
+            </div>
+            <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+              <Leaf className="w-5 h-5 fill-emerald-600/10" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-bold pt-2 border-t border-gray-100">
+            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+              Transport: {transportEmission.toFixed(2)}t
+            </span>
+            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+              Food: {foodEmission.toFixed(2)}t
+            </span>
+          </div>
+        </section>
+
+        {/* CARD 2: MONTHLY AVERAGE */}
+        <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between h-[150px]">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                Monthly Average
+              </span>
+              <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none">
+                {monthlyAverage.toFixed(2)} <span className="text-sm font-extrabold text-gray-500">tons/mo</span>
+              </h2>
+            </div>
+            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100">
+              <TrendingDown className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs font-semibold text-gray-500 pt-2 border-t border-gray-100">
+            <span>Based on {totalCalculationsCount} calculations</span>
+            <span className="text-emerald-600 font-extrabold">Target: &lt; 2.50t</span>
+          </div>
+        </section>
+
+        {/* CARD 3: EMISSION TREND */}
+        <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between h-[150px]">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                Progress Trend
+              </span>
+              <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none flex items-center gap-1.5">
+                <span>{percentageChange < 0 ? `${percentageChange}%` : `+${percentageChange}%`}</span>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                  {percentageChange < 0 ? "Reduction" : "Increase"}
+                </span>
+              </h2>
+            </div>
+            <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600 border border-purple-100">
+              <Zap className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="text-xs font-medium text-gray-500 pt-2 border-t border-gray-100">
+            <span>Compared to previous calculation</span>
+          </div>
+        </section>
+
+      </div>
+
+      {/* MAIN 2-COLUMN DASHBOARD GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        
+        {/* LEFT COLUMN: CHARTS, BADGES & LEADERBOARD (2 Cols) */}
+        <div className="lg:col-span-2 space-y-6">
           
-          {/* CARD 1: YOUR CARBON FOOTPRINT */}
-          <section className="bg-white rounded-2xl border border-gray-150 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/40 rounded-full blur-3xl -z-10" />
-            
-            {/* Gauge section */}
-            <div className="flex flex-col sm:flex-row items-center gap-6 flex-1">
-              {/* Circular Gauge */}
-              <div className="relative w-36 h-36 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90">
-                  {/* Background track circle */}
-                  <circle
-                    cx="72"
-                    cy="72"
-                    r="54"
-                    fill="transparent"
-                    stroke="#f1f5f9"
-                    strokeWidth="11"
-                  />
-                  {/* Active circular progress path */}
-                  <circle
-                    cx="72"
-                    cy="72"
-                    r="54"
-                    fill="transparent"
-                    stroke="#16a34a"
-                    strokeWidth="11"
-                    strokeDasharray={2 * Math.PI * 54}
-                    strokeDashoffset={2 * Math.PI * 54 * (1 - Math.min(totalEmission / 4.0, 1.0))}
-                    strokeLinecap="round"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                {/* Gauge contents */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <div className="bg-emerald-50 p-1.5 rounded-full text-emerald-600 mb-1">
-                    <Leaf className="w-4 h-4 fill-emerald-600/10" />
-                  </div>
-                  <span className="text-2xl font-black text-gray-900 leading-none">{totalEmission.toFixed(2)}</span>
-                  <span className="text-[10px] text-gray-500 font-bold tracking-tight mt-0.5 uppercase">tons CO₂e</span>
-                  <span className="text-[9px] text-emerald-600 font-semibold mt-0.5">This Month</span>
-                </div>
-              </div>
-
-              {/* Progress Details text */}
-              <div className="text-center sm:text-left flex-1 max-w-sm">
-                <h3 className="text-base font-bold text-gray-800">Your Carbon Footprint</h3>
-                <p className="text-sm text-gray-500 mt-1 leading-snug">
-                  {!hasData
-                    ? "No calculations recorded yet. Calculate your footprint to get started!"
-                    : percentageChange <= 0
-                    ? "You are doing better than last month!"
-                    : "Emissions increased slightly. Check tips to reduce!"}
-                </p>
-                <div className="flex items-center justify-center sm:justify-start gap-1.5 mt-2.5 text-emerald-600 bg-emerald-50 w-max px-3 py-1 rounded-full text-xs font-extrabold border border-emerald-100">
-                  <TrendingDown className={`w-4.5 h-4.5 animate-bounce ${percentageChange > 0 ? "rotate-180 text-red-500" : ""}`} />
-                  <span>{Math.abs(percentageChange)}% from last calculation</span>
-                </div>
-                <button className="mt-4 flex items-center justify-center sm:justify-start gap-2 border border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs font-bold px-4 py-2.5 rounded-xl transition duration-200 cursor-pointer">
-                  <span>View Full Report</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Globe Illustration */}
-            <div className="w-48 h-36 relative overflow-hidden rounded-2xl flex items-center justify-center bg-gradient-to-br from-emerald-50/50 to-green-50/20">
-              <img
-                src="/dashboard-globe.jpg"
-                alt="Sustainability Globe"
-                className="w-full h-full object-contain mix-blend-multiply scale-110 group-hover:scale-115 transition duration-500"
-              />
-            </div>
-          </section>
-
-          {/* CARD 2: EMISSIONS OVER TIME & BREAKDOWN */}
+          {/* ROW 2: CHARTS GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* CARD 2A: EMISSIONS OVER TIME (LINE CHART) */}
@@ -303,80 +252,72 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="text-sm font-extrabold text-gray-900">Emissions Over Time</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5 tracking-tight">(tons CO₂e)</p>
+                  <p className="text-[10px] text-gray-400 font-medium">Tracking calculation history</p>
                 </div>
+
                 <div className="relative">
                   <select
                     value={timeframe}
                     onChange={(e) => setTimeframe(e.target.value)}
-                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-600 text-xs font-semibold px-3 py-1.5 pr-8 rounded-lg outline-none cursor-pointer hover:bg-gray-100 transition"
+                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-lg outline-none cursor-pointer hover:bg-gray-100 transition"
                   >
                     <option>Monthly</option>
                     <option>Weekly</option>
-                    <option>Yearly</option>
                   </select>
-                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
-              {/* SVG Line Chart */}
-              <div className="relative flex-grow flex items-end">
-                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
-                  <defs>
-                    <linearGradient id="green-area-grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22c55e" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Y-axis gridlines */}
-                  {[0, 1, 2, 3, 4].map((gridval) => {
-                    const y = chartHeight - paddingBottom - (gridval * (chartHeight - paddingTop - paddingBottom)) / 4.0;
+              {/* Line Chart SVG */}
+              <div className="relative flex-grow w-full h-full flex items-center justify-center">
+                <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+                  {/* Grid Lines */}
+                  {[0, 1, 2, 3].map((g) => {
+                    const y = paddingTop + (g * (chartHeight - paddingTop - paddingBottom)) / 3;
                     return (
-                      <g key={gridval}>
-                        <line
-                          x1={paddingLeft}
-                          y1={y}
-                          x2={chartWidth - paddingRight}
-                          y2={y}
-                          stroke="#f1f5f9"
-                          strokeWidth="1.5"
-                        />
-                        <text
-                          x={paddingLeft - 8}
-                          y={y + 3.5}
-                          fill="#94a3b8"
-                          fontSize="10"
-                          fontWeight="bold"
-                          textAnchor="end"
-                        >
-                          {gridval.toFixed(1)}
-                        </text>
-                      </g>
+                      <line
+                        key={g}
+                        x1={paddingLeft}
+                        y1={y}
+                        x2={chartWidth - paddingRight}
+                        y2={y}
+                        stroke="#f1f5f9"
+                        strokeDasharray="3 3"
+                      />
                     );
                   })}
 
-                  {/* Gradient Area under line */}
-                  <path d={areaPath} fill="url(#green-area-grad)" />
+                  {/* Gradient Area Fill */}
+                  {areaPath && (
+                    <path
+                      d={areaPath}
+                      fill="url(#greenGradient)"
+                      opacity="0.25"
+                    />
+                  )}
+
+                  <defs>
+                    <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
 
                   {/* Line Path */}
-                  <path
-                    d={linePath}
-                    fill="none"
-                    stroke="#22c55e"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
+                  {linePath && (
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke="#22c55e"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
 
-                  {/* Chart Points & Hover triggers */}
+                  {/* Interactive Points */}
                   {points.map((p, idx) => (
-                    <g
-                      key={idx}
-                      className="cursor-pointer"
-                      onMouseEnter={() => setHoveredDataIndex(idx)}
-                      onMouseLeave={() => setHoveredDataIndex(null)}
-                    >
-                      {/* Dot shadow */}
+                    <g key={idx} onMouseEnter={() => setHoveredDataIndex(idx)} onMouseLeave={() => setHoveredDataIndex(null)}>
                       <circle
                         cx={p.x}
                         cy={p.y}
@@ -384,13 +325,8 @@ export default function DashboardPage() {
                         fill={hoveredDataIndex === idx ? "#15803d" : "#22c55e"}
                         className="transition-all duration-150"
                       />
-                      {/* Inner white dot */}
                       <circle cx={p.x} cy={p.y} r="2" fill="white" />
-                      
-                      {/* Interactive invisible larger hover zone */}
                       <circle cx={p.x} cy={p.y} r="18" fill="transparent" />
-
-                      {/* X-axis labels */}
                       <text
                         x={p.x}
                         y={chartHeight - 6}
@@ -405,7 +341,7 @@ export default function DashboardPage() {
                   ))}
                 </svg>
 
-                {/* Interactive Tooltip Card overlay */}
+                {/* Interactive Tooltip Overlay */}
                 {hoveredDataIndex !== null && points[hoveredDataIndex] && (
                   <div
                     className="absolute bg-slate-900 text-white rounded-lg px-2.5 py-1.5 text-[10px] font-bold shadow-xl border border-slate-800 transition duration-150 pointer-events-none -translate-x-1/2"
@@ -420,20 +356,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Highlight box for latest static/dynamic value */}
-                {hoveredDataIndex === null && points.length > 0 && (
-                  <div
-                    className="absolute bg-white text-gray-900 border border-gray-200 rounded-lg px-2 py-1 shadow-md text-[10px] font-bold -translate-x-1/2"
-                    style={{
-                      left: `${(points[points.length - 1].x / chartWidth) * 100}%`,
-                      bottom: `${((chartHeight - points[points.length - 1].y + 12) / chartHeight) * 100}%`,
-                    }}
-                  >
-                    <span className="text-xs font-black text-gray-800">{points[points.length - 1].val.toFixed(2)}</span>
-                    <span className="text-gray-400 ml-0.5">tons</span>
-                  </div>
-                )}
               </div>
             </section>
 
@@ -445,7 +367,7 @@ export default function DashboardPage() {
                 {/* Donut graphic */}
                 <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
                   <svg className="w-full h-full transform -rotate-90">
-                    {breakdownData.map((seg, i) => {
+                    {breakdownData.map((seg) => {
                       const pctStroke = (seg.pct * circ) / 100;
                       const pctOffset = circ - (accumulatedAngle * circ) / 100;
                       accumulatedAngle += seg.pct;
@@ -461,7 +383,7 @@ export default function DashboardPage() {
                           strokeWidth={strokeWidth}
                           strokeDasharray={`${pctStroke} ${circ}`}
                           strokeDashoffset={pctOffset}
-                          className="transition-all duration-300 animate-pulse-slow"
+                          className="transition-all duration-300"
                         />
                       );
                     })}
@@ -503,9 +425,9 @@ export default function DashboardPage() {
             <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between min-h-[220px]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-extrabold text-gray-900">Your Badges</h3>
-                <button className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
+                <Link href="/dashboard/challenges" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
                   See all
-                </button>
+                </Link>
               </div>
 
               <div className="grid grid-cols-5 gap-2.5 flex-grow items-center">
@@ -515,7 +437,7 @@ export default function DashboardPage() {
                       className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all duration-200 group-hover:scale-105 ${
                         badge.locked || !badge.active
                           ? "bg-gray-50 text-gray-300 border-gray-200"
-                          : badge.color
+                          : badge.color || "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]"
                       }`}
                     >
                       {badge.locked || !badge.active ? (
@@ -542,8 +464,8 @@ export default function DashboardPage() {
                     onChange={(e) => setLeaderboardTime(e.target.value)}
                     className="appearance-none bg-gray-50 border border-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-lg outline-none cursor-pointer hover:bg-gray-100 transition"
                   >
-                    <option>This Week</option>
-                    <option>All Time</option>
+                    <option value="weekly">This Week</option>
+                    <option value="all">All Time</option>
                   </select>
                   <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
@@ -583,57 +505,25 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* RIGHT COLUMN FOR RECOMMENDATIONS & CHALLENGES */}
+        {/* RIGHT COLUMN FOR CHALLENGES & LEARNING HUB */}
         <div className="flex flex-col space-y-6">
-          
-          {/* CARD 4: AI RECOMMENDATIONS */}
-          <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col h-[280px]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold text-gray-900">AI Recommendations</h3>
-              <button className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
-                See all
-              </button>
-            </div>
-
-            <div className="space-y-3.5 flex-grow overflow-y-auto">
-              {recommendations.map((rec, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 bg-white hover:border-emerald-100 hover:bg-emerald-50/20 cursor-pointer transition duration-200 group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${rec.iconBg}`}>
-                      {rec.icon}
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black text-gray-805 leading-tight group-hover:text-emerald-800 transition">
-                        {rec.title}
-                      </h4>
-                      <p className="text-[10px] text-gray-400 font-medium mt-0.5">{rec.desc}</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition" />
-                </div>
-              ))}
-            </div>
-          </section>
 
           {/* CARD 5: ACTIVE CHALLENGES */}
           <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col h-[280px]">
             <div className="flex items-center justify-between mb-3.5">
               <h3 className="text-sm font-extrabold text-gray-900">Active Challenges</h3>
-              <button className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
+              <Link href="/dashboard/challenges" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
                 See all
-              </button>
+              </Link>
             </div>
 
             <div className="space-y-3.5 flex-grow overflow-y-auto">
               {challenges.map((chal, i) => (
-                <div key={i} className={`p-3 rounded-xl border ${chal.border} bg-white flex flex-col space-y-2`}>
+                <Link key={chal.id || i} href="/dashboard/challenges" className="p-3 rounded-xl border border-gray-150 bg-white flex flex-col space-y-2 hover:border-emerald-300 transition block">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${chal.iconBg}`}>
-                        {chal.icon}
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-600">
+                        <Trophy className="w-4 h-4" />
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-gray-850 leading-tight">{chal.title}</h4>
@@ -647,13 +537,13 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <div className="h-2 bg-gray-100 rounded-full flex-grow overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${chal.color}`}
+                        className={`h-full rounded-full transition-all duration-500 ${chal.color || "bg-emerald-600"}`}
                         style={{ width: `${chal.progress}%` }}
                       />
                     </div>
                     <span className="text-[10px] font-black text-gray-705 w-8 text-right">{chal.progress}%</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
@@ -662,36 +552,35 @@ export default function DashboardPage() {
           <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between h-[220px]">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-extrabold text-gray-900">Learning Hub</h3>
-              <button className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
+              <Link href="/dashboard/learning" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
                 See all
-              </button>
+              </Link>
             </div>
 
-            <div className="flex items-center gap-3.5 bg-emerald-50/40 border border-emerald-100/50 p-4 rounded-2xl flex-grow">
-              {/* Book graphic */}
+            <Link href="/dashboard/learning" className="flex items-center gap-3.5 bg-emerald-50/40 border border-emerald-100/50 p-4 rounded-2xl flex-grow hover:border-emerald-300 transition block">
               <div className="w-16 h-16 relative flex-shrink-0 bg-emerald-50 rounded-xl overflow-hidden flex items-center justify-center border border-emerald-100">
-                <Leaf className="w-9 h-9 text-emerald-600 fill-emerald-600/10" />
+                <BookOpen className="w-8 h-8 text-emerald-600" />
               </div>
 
               <div className="flex-1 flex flex-col justify-between space-y-2">
                 <div>
-                  <h4 className="text-xs font-black text-gray-800 leading-tight">What is Carbon Footprint?</h4>
-                  <p className="text-[10px] text-gray-400 leading-relaxed font-semibold mt-1">
-                    Learn the basics of carbon footprint and its impact on climate change.
+                  <h4 className="text-xs font-black text-gray-800 leading-tight">{learningWidget.title}</h4>
+                  <p className="text-[10px] text-gray-400 leading-relaxed font-semibold mt-1 line-clamp-2">
+                    {learningWidget.desc}
                   </p>
                 </div>
 
                 <div className="flex flex-col space-y-1">
                   <div className="flex items-center justify-between text-[9px] text-gray-400 font-bold">
                     <span>Progress</span>
-                    <span>75%</span>
+                    <span>{learningWidget.progress}%</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full w-full overflow-hidden">
-                    <div className="h-full bg-[#16a34a] rounded-full" style={{ width: "75%" }} />
+                    <div className="h-full bg-[#16a34a] rounded-full transition-all duration-500" style={{ width: `${learningWidget.progress}%` }} />
                   </div>
                 </div>
               </div>
-            </div>
+            </Link>
           </section>
 
         </div>
