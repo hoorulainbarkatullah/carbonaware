@@ -127,17 +127,66 @@ export async function GET(request: Request) {
     }));
 
     // 6. Fetch Real Active Challenges
-    const dbChallenges = await prisma.challenge.findMany({
-      where: { status: "Active" },
+    let dbChallenges = await prisma.challenge.findMany({
       take: 3,
     });
+
+    if (dbChallenges.length === 0) {
+      const defaultChallenges = [
+        {
+          title: "Zero Plastic Week",
+          description: "Avoid single-use plastic bottles and packaging for 7 consecutive days.",
+          fullDescription: "Reduce land and ocean pollution by eliminating single-use plastics.",
+          difficulty: "Easy",
+          category: "Waste Reduction",
+          estimatedTime: "7 days",
+          rewardPoints: 150,
+          xpReward: 300,
+          topicsCovered: "Plastic recycling, zero waste principles",
+          totalQuestions: 5,
+          status: "Active",
+        },
+        {
+          title: "Public Transit Commute",
+          description: "Use public transport or bicycle instead of driving your car for 3 days.",
+          fullDescription: "Lower your transport emissions by swapping car rides for green transit.",
+          difficulty: "Medium",
+          category: "Transportation",
+          estimatedTime: "3 days",
+          rewardPoints: 200,
+          xpReward: 400,
+          topicsCovered: "Clean mobility, carbon offset",
+          totalQuestions: 5,
+          status: "Active",
+        },
+        {
+          title: "Energy Saver Challenge",
+          description: "Unplug idle electronics and reduce home energy usage by 15%.",
+          fullDescription: "Save electricity and cut your monthly household energy footprint.",
+          difficulty: "Easy",
+          category: "Energy Efficiency",
+          estimatedTime: "5 days",
+          rewardPoints: 100,
+          xpReward: 250,
+          topicsCovered: "Vampire power, energy efficiency",
+          totalQuestions: 5,
+          status: "Active",
+        },
+      ];
+
+      for (const ch of defaultChallenges) {
+        await prisma.challenge.create({ data: ch as any });
+      }
+
+      dbChallenges = await prisma.challenge.findMany({ take: 3 });
+    }
 
     const userProgress = user ? await prisma.userChallengeProgress.findMany({ where: { userId: user.id } }) : [];
 
     const activeChallenges = dbChallenges.map((c, i) => {
       const prog = userProgress.find((p) => p.challengeId === c.id);
       const completedQ = prog?.completedQuestions || 0;
-      const totalQ = c.totalQuestions || 10;
+      const totalQ = c.totalQuestions || 5;
       const progressPct = Math.round((completedQ / totalQ) * 100);
 
       const colors = ["bg-[#22c55e]", "bg-amber-500", "bg-purple-500"];

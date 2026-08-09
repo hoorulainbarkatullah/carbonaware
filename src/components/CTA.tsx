@@ -17,7 +17,7 @@ export default function CTA() {
             <div
               className="min-h-[220px] w-full bg-cover bg-center bg-no-repeat rounded-l-3xl"
               style={{
-                backgroundImage: "url('/cta-illustration.JPEG')",
+                backgroundImage: "url('/cta-illustration.png')",
               }}
             />
 
@@ -39,7 +39,7 @@ export default function CTA() {
             {/* Right Side Button */}
             <div className="flex items-center justify-center lg:justify-end px-6 py-10 lg:pr-10">
               <Link
-                href="#signup"
+                href="/signup"
                 className="group inline-flex items-center rounded-xl bg-white px-5 py-4 gap-2 text-base text-dark-forest shadow-lg transition-all duration-300 hover:bg-accent-green hover:-translate-y-1"
               >
                 <span>Create Free Account</span>

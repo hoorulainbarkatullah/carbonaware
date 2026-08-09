@@ -103,10 +103,10 @@ export default function DashboardPage() {
           if (data.lineChartData && data.lineChartData.length > 0) setLineChartData(data.lineChartData);
           if (data.breakdownData && data.breakdownData.length > 0) setBreakdownData(data.breakdownData);
 
-          if (data.badges && data.badges.length > 0) setBadges(data.badges);
-          if (data.leaderboard && data.leaderboard.length > 0) setLeaderboard(data.leaderboard);
-          if (data.recommendations && data.recommendations.length > 0) setRecommendations(data.recommendations);
-          if (data.activeChallenges && data.activeChallenges.length > 0) setChallenges(data.activeChallenges);
+          if (data.badges) setBadges(data.badges);
+          if (data.leaderboard) setLeaderboard(data.leaderboard);
+          if (data.recommendations) setRecommendations(data.recommendations);
+          if (data.activeChallenges) setChallenges(data.activeChallenges);
           if (data.learningHubWidget) setLearningWidget(data.learningHubWidget);
         }
       }
