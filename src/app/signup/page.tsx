@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,8 @@ import {
   Footprints,
   Bot,
   Award,
+  X,
+  AlertCircle,
 } from "lucide-react";
 
 export default function SignUpPage() {
@@ -26,6 +28,14 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Auto-dismiss error message after 4 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,37 +79,53 @@ export default function SignUpPage() {
   return (
     <div className="min-h-screen w-full flex items-stretch bg-[#f4f8f5]">
       {/* Left illustration / features panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#f0f9f3] flex-col p-12">
-
+      <div
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden text-white flex-col p-12"
+        style={{
+          backgroundImage: `
+      linear-gradient(
+        135deg,
+        rgba(10,39,28,0.82),
+        rgba(15,61,46,0.78),
+        rgba(18,76,56,0.84)
+      ),
+      url('/hero-illustration.png')
+    `,
+          backgroundSize: "cover",
+          backgroundPosition: "right center",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
         {/* Background Decoration */}
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-green-100/60 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-[#061811]/70 to-transparent" />
 
         {/* ================= Logo ================= */}
         <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-9 h-9 rounded-full bg-[#12603c]/10">
-              <Leaf className="w-5 h-5 text-[#12603c]" strokeWidth={2.5} />
-            </span>
-
-            <h1 className="text-xl font-semibold tracking-tight text-[#0f4a2f]">
-              Carbon<span className="text-green-600">Aware</span>
-            </h1>
-          </div>
-
-          <p className="ml-11 mt-1 text-sm text-gray-500">
-            Track. Reduce. Sustain.
-          </p>
+          <Link href="/" className="flex items-center space-x-2 group self-start">
+            <div className="bg-emerald-500/20 p-2 rounded-lg text-green-400 transition-transform group-hover:scale-110">
+              <Leaf className="h-6 w-6" />
+            </div>
+            <div>
+              <span className="text-xl font-bold text-white tracking-tight block leading-none">
+                Carbon<span className="text-green-400">Aware</span>
+              </span>
+              <span className="text-[10px] text-white/70 block font-medium uppercase tracking-wider leading-none mt-1">
+                Track. Reduce. Sustain.
+              </span>
+            </div>
+          </Link>
         </div>
 
         {/* ================= Content ================= */}
         <div className="relative z-10 mt-20">
           <div className="flex-col  ">
 
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">
+            <h2 className="text-3xl font-bold text-white mb-3">
               Create Account 🌿
             </h2>
 
-            <p className="text-gray-500 text-[16px] leading-relaxed mb-8">
+            <p className="text-white/80 text-[16px] leading-relaxed mb-8">
               Join CarbonAware and start your journey towards a sustainable life.
             </p>
 
@@ -110,19 +136,19 @@ export default function SignUpPage() {
               <div className="flex-1 space-y-5">
 
                 <FeatureRow
-                  icon={<Footprints className="w-5 h-5 text-green-700" />}
+                  icon={<Footprints className="w-5 h-5 text-green-400" />}
                   title="Track Your Footprint"
                   desc="Calculate and monitor your carbon emissions easily."
                 />
 
                 <FeatureRow
-                  icon={<Bot className="w-5 h-5 text-green-700" />}
+                  icon={<Bot className="w-5 h-5 text-green-400" />}
                   title="Get AI Recommendations"
                   desc="Personalized tips to reduce your carbon footprint."
                 />
 
                 <FeatureRow
-                  icon={<Award className="w-5 h-5 text-green-700" />}
+                  icon={<Award className="w-5 h-5 text-green-400" />}
                   title="Earn Rewards"
                   desc="Complete challenges and earn badges while making an impact."
                 />
@@ -162,8 +188,19 @@ export default function SignUpPage() {
           </p>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-650 text-xs font-black">
-              {error}
+            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-black flex items-center justify-between gap-2 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError("")}
+                className="text-red-400 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-100 cursor-pointer"
+                title="Close error message"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 
@@ -362,13 +399,13 @@ function FeatureRow({
   desc: string;
 }) {
   return (
-    <div className="flex items-start gap-3 bg-white rounded-xl p-3.5 border border-green-100/80 shadow-sm">
-      <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-green-50 shrink-0">
+    <div className="flex items-start gap-3 bg-white/10 backdrop-blur-md rounded-xl p-3.5 border border-white/10 shadow-sm">
+      <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/20 shrink-0">
         {icon}
       </span>
       <div>
-        <p className="text-sm font-semibold text-gray-900">{title}</p>
-        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+        <p className="text-sm font-semibold text-white">{title}</p>
+        <p className="text-xs text-white/70 mt-0.5 leading-relaxed">{desc}</p>
       </div>
     </div>
   );

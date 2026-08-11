@@ -24,16 +24,21 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Columns Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8 pb-12 border-b border-white/10">
-          
+
           {/* Column 1: Brand details */}
           <div className="flex flex-col space-y-4 lg:col-span-1">
-            <Link href="#home" className="flex items-center space-x-2 self-start">
-              <div className="bg-white/10 p-2 rounded-lg text-secondary-green">
+            <Link href="#home" className="flex items-center space-x-2 group self-start">
+              <div className="bg-white/10 p-2 rounded-lg text-secondary-green transition-transform group-hover:scale-110">
                 <Leaf className="h-6 w-6" />
               </div>
-              <span className="text-xl font-bold text-white tracking-tight">
-                Carbon<span className="text-secondary-green">Aware</span>
-              </span>
+              <div>
+                <span className="text-xl font-bold text-white tracking-tight block leading-none">
+                  Carbon<span className="text-secondary-green">Aware</span>
+                </span>
+                <span className="text-[10px] text-white/70 block font-medium uppercase tracking-wider leading-none mt-1">
+                  Track. Reduce. Sustain.
+                </span>
+              </div>
             </Link>
             <p className="text-xs text-white/70 font-medium leading-relaxed">
               Empowering the world to track carbon footprint output using state-of-the-art AI. Let&apos;s create a greener future together.

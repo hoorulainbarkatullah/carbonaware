@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Leaf, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Leaf, Mail, Lock, Eye, EyeOff, X, AlertCircle } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -12,6 +12,14 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Auto-dismiss error alert after 4 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,19 +75,19 @@ export default function SignInPage() {
 
         {/* ================= Logo ================= */}
         <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm">
-              <Leaf className="w-5 h-5 text-green-400" strokeWidth={2.5} />
-            </span>
-
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Carbon<span className="text-green-400">Aware</span>
-            </h1>
-          </div>
-
-          <p className="ml-12 mt-1 text-sm text-white/70">
-            Track. Reduce. Sustain.
-          </p>
+          <Link href="/" className="flex items-center space-x-2 group self-start">
+            <div className="bg-emerald-500/20 p-2 rounded-lg text-green-400 transition-transform group-hover:scale-110">
+              <Leaf className="h-6 w-6" />
+            </div>
+            <div>
+              <span className="text-xl font-bold text-white tracking-tight block leading-none">
+                Carbon<span className="text-green-400">Aware</span>
+              </span>
+              <span className="text-[10px] text-white/70 block font-medium uppercase tracking-wider leading-none mt-1">
+                Track. Reduce. Sustain.
+              </span>
+            </div>
+          </Link>
         </div>
 
         {/* ================= Hero + Stats ================= */}
@@ -141,8 +149,19 @@ export default function SignInPage() {
           </p>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-650 text-xs font-black">
-              {error}
+            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-black flex items-center justify-between gap-2 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError("")}
+                className="text-red-400 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-100 cursor-pointer"
+                title="Close error message"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 

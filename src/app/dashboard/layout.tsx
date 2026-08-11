@@ -44,7 +44,8 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Weather state
+  // Points & Weather state
+  const [userPoints, setUserPoints] = useState<number>(0);
   const [weatherTemp, setWeatherTemp] = useState<string>("26°C");
 
   // Notifications state & dropdown toggle
@@ -67,6 +68,18 @@ export default function DashboardLayout({
         const parsed = JSON.parse(storedUser);
         setUser(parsed);
 
+        const uid = parsed.id || parsed.email;
+
+        // Fetch Live User Points from Dashboard Stats API
+        fetch(`/api/dashboard/stats?userId=${encodeURIComponent(uid)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.userPoints !== undefined) {
+              setUserPoints(data.userPoints);
+            }
+          })
+          .catch(() => {});
+
         // Fetch Weather
         fetch(`/api/weather?location=${encodeURIComponent(parsed.location || "Peshawar, KP")}`)
           .then((res) => res.json())
@@ -76,7 +89,6 @@ export default function DashboardLayout({
           .catch(() => {});
 
         // Fetch Notifications
-        const uid = parsed.id || parsed.email;
         fetch(`/api/user/notifications?userId=${encodeURIComponent(uid)}`)
           .then((res) => res.json())
           .then((data) => {
@@ -280,15 +292,15 @@ export default function DashboardLayout({
         <div className="flex flex-col space-y-7">
           {/* Logo */}
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2.5">
-              <div className="bg-emerald-500/20 p-2 rounded-xl text-emerald-400">
+            <Link href="/" className="flex items-center space-x-2.5 group">
+              <div className="bg-emerald-500/20 p-2 rounded-xl text-emerald-400 transition-transform group-hover:scale-110">
                 <Leaf className="h-6 w-6" />
               </div>
               <div>
-                <span className="text-xl font-bold tracking-tight block leading-none">
+                <span className="text-xl font-bold tracking-tight block leading-none text-white">
                   Carbon<span className="text-[#22c55e]">Aware</span>
                 </span>
-                <span className="text-[10px] text-emerald-400/80 block font-medium uppercase tracking-wider mt-1.5">
+                <span className="text-[10px] text-emerald-400/80 block font-medium uppercase tracking-wider leading-none mt-1">
                   Track. Reduce. Sustain.
                 </span>
               </div>
@@ -353,10 +365,10 @@ export default function DashboardLayout({
       </aside>
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto lg:px-8 px-4 py-6">
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto lg:px-8 px-4 pb-6">
         
-        {/* ================= HEADER ================= */}
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-100">
+        {/* ================= HEADER (STICKY TOPBAR) ================= */}
+        <header className="sticky top-0 z-30 bg-[#f4f7f6]/95 backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-6 pb-4 mb-6 border-b border-gray-200/80">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -385,6 +397,12 @@ export default function DashboardLayout({
           <div className="flex items-center gap-3.5 self-stretch sm:self-auto justify-end">
             {header.isWelcome ? (
               <>
+                {/* Eco Points Live Counter */}
+                <div className="flex items-center gap-2 bg-emerald-50/90 px-4 py-2.5 rounded-xl border border-emerald-200/80 shadow-sm text-sm font-black text-emerald-800 flex-1 sm:flex-none justify-center">
+                  <Trophy className="w-4.5 h-4.5 text-amber-500 fill-amber-400" />
+                  <span>{userPoints.toLocaleString()} Pts</span>
+                </div>
+
                 {/* Real Location */}
                 <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-gray-200/85 shadow-sm text-sm font-semibold text-gray-700 flex-1 sm:flex-none justify-center">
                   <MapPin className="w-4.5 h-4.5 text-emerald-600" />

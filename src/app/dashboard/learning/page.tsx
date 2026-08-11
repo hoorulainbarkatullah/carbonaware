@@ -23,7 +23,9 @@ import {
   MoreHorizontal,
   ChevronRight,
   Clock,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2
 } from "lucide-react";
 
 export default function LearningPage() {
@@ -41,12 +43,33 @@ export default function LearningPage() {
   const [newTag, setNewTag] = useState("Question");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Edit Question Modal State
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editTopic, setEditTopic] = useState("Climate Change 101");
+  const [editTag, setEditTag] = useState("Question");
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Delete Confirmation Modal State (Yes / No Alert)
+  const [deletingQuestion, setDeletingQuestion] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // All Topics Modal / Separate View State
+  const [isAllTopicsModalOpen, setIsAllTopicsModalOpen] = useState(false);
+
   // Topic Details Modal State (Open Topic separately with lessons & close button)
   const [selectedTopicModal, setSelectedTopicModal] = useState<any | null>(null);
   const [topicLessons, setTopicLessons] = useState<any[]>([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [activeLessonIndex, setActiveLessonIndex] = useState<number | null>(null);
   const [completingLessonId, setCompletingLessonId] = useState<string | null>(null);
+
+  // Question Comments Modal State
+  const [selectedQuestionModal, setSelectedQuestionModal] = useState<any | null>(null);
+  const [questionAnswers, setQuestionAnswers] = useState<any[]>([]);
+  const [newCommentContent, setNewCommentContent] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // Dynamic state from MongoDB APIs
   const [topics, setTopics] = useState<any[]>([]);
@@ -225,19 +248,146 @@ export default function LearningPage() {
     }
   };
 
-  // Handle Question Like
+  // Handle Question 1-Time Toggle Like
   const handleLikeQuestion = async (id: string) => {
     try {
+      const uid = getUserId();
       const res = await fetch(`/api/questions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "like" }),
+        body: JSON.stringify({ action: "toggle_like", userId: uid }),
       });
       if (res.ok) {
         fetchQuestions(activeTab, searchTerm);
       }
     } catch (err) {
       console.error("Like error:", err);
+    }
+  };
+
+  // Open Question Comments Modal
+  const handleOpenQuestionComments = async (question: any) => {
+    setSelectedQuestionModal(question);
+    setQuestionAnswers([]);
+    try {
+      const res = await fetch(`/api/questions/${question.id}`);
+      const data = await res.json();
+      if (data.success) {
+        setQuestionAnswers(data.answers || []);
+      }
+    } catch (err) {
+      console.error("Fetch answers error:", err);
+    }
+  };
+
+  // Submit New Comment on Question
+  const handleAddCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQuestionModal || !newCommentContent.trim()) return;
+
+    try {
+      setIsSubmittingComment(true);
+      const uid = getUserId();
+      const userName = typeof window !== "undefined" && localStorage.getItem("user")
+        ? JSON.parse(localStorage.getItem("user")!).name
+        : "Eco Warrior";
+
+      const res = await fetch(`/api/questions/${selectedQuestionModal.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_comment",
+          userId: uid,
+          author: userName,
+          content: newCommentContent.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setNewCommentContent("");
+        handleOpenQuestionComments(selectedQuestionModal);
+        fetchQuestions(activeTab, searchTerm);
+      }
+    } catch (err) {
+      console.error("Add comment error:", err);
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  // Open Edit Question Modal
+  const handleOpenEditModal = (q: any) => {
+    setEditingQuestion(q);
+    setEditTitle(q.title || "");
+    setEditDescription(q.description || "");
+    setEditTopic(q.topic || "Climate Change 101");
+    setEditTag(q.difficultyTag || "Question");
+  };
+
+  // Submit Update Question
+  const handleUpdateQuestionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuestion || !editTitle.trim() || !editDescription.trim()) return;
+
+    try {
+      setIsSubmittingEdit(true);
+      const uid = getUserId();
+
+      const res = await fetch(`/api/questions/${editingQuestion.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "edit_question",
+          requestUserId: uid,
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          topic: editTopic,
+          difficultyTag: editTag,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setEditingQuestion(null);
+        fetchQuestions(activeTab, searchTerm);
+      } else {
+        alert(data.error || "Failed to update question");
+      }
+    } catch (err) {
+      console.error("Update question error:", err);
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  // Open Delete Confirmation Modal
+  const handleOpenDeleteModal = (q: any) => {
+    setDeletingQuestion(q);
+  };
+
+  // Perform Permanent Delete (Post + Comments + Likes)
+  const handleConfirmDeleteQuestion = async () => {
+    if (!deletingQuestion) return;
+
+    try {
+      setIsDeleting(true);
+      const uid = getUserId();
+      const res = await fetch(`/api/questions/${deletingQuestion.id}?userId=${encodeURIComponent(uid)}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setDeletingQuestion(null);
+        fetchQuestions(activeTab, searchTerm);
+      } else {
+        alert(data.error || "Failed to delete question");
+      }
+    } catch (err) {
+      console.error("Delete question error:", err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -380,21 +530,29 @@ export default function LearningPage() {
           {/* EXPLORE TOPICS CARDS */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-extrabold text-gray-900">Explore Topics</h3>
-              <span className="text-[11px] font-extrabold text-gray-400">
-                Click any topic to open lessons
-              </span>
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900">Explore Topics</h3>
+                <p className="text-[10px] text-gray-400 font-medium">Click any topic to open lessons & earn certificates</p>
+              </div>
+              
+              <button
+                onClick={() => setIsAllTopicsModalOpen(true)}
+                className="text-xs font-extrabold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <span>Explore All Topics ({topics.length})</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Topic Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 overflow-x-auto">
-              {topics.map((topic) => {
+            {/* Topic Cards Grid (Showing top 4 topics cleanly) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+              {topics.slice(0, 4).map((topic) => {
                 const completed = isTopicCompleted(topic.id || topic.slug);
                 return (
                   <div
                     key={topic.id || topic.slug}
                     onClick={() => handleOpenTopicModal(topic)}
-                    className={`bg-white rounded-2xl border p-4 shadow-[0_4px_20px_rgb(0,0,0,0.015)] flex flex-col justify-between items-center text-center space-y-3 hover:border-emerald-400 transition cursor-pointer min-h-[220px] relative ${
+                    className={`bg-white rounded-2xl border p-4 shadow-[0_4px_20px_rgb(0,0,0,0.015)] flex flex-col justify-between items-center text-center space-y-3 hover:border-emerald-400 hover:shadow-md transition cursor-pointer min-h-[220px] relative ${
                       completed ? "border-emerald-300 bg-emerald-50/10" : "border-gray-150"
                     }`}
                   >
@@ -450,15 +608,15 @@ export default function LearningPage() {
               </div>
             </div>
 
-            {/* Questions List */}
+            {/* Questions List (Top 4 Questions) */}
             <div className="space-y-3.5">
-              {questions.map((q) => (
+              {questions.slice(0, 4).map((q) => (
                 <div
                   key={q.id}
-                  className="p-4 rounded-2xl border border-gray-150 hover:border-emerald-200 transition space-y-3 bg-white"
+                  className="p-4 rounded-2xl border border-gray-150 hover:border-emerald-200 transition space-y-3 bg-white relative group"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-grow pr-16">
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                           {q.topic}
@@ -472,6 +630,31 @@ export default function LearningPage() {
                         {q.description}
                       </p>
                     </div>
+
+                    {/* Owner Actions (Edit / Delete) */}
+                    {(() => {
+                      const uid = getUserId();
+                      const isOwner = q.userId === uid || (uid && q.userId && q.userId.toString() === uid.toString());
+                      if (!isOwner) return null;
+                      return (
+                        <div className="flex items-center gap-1.5 absolute right-4 top-4">
+                          <button
+                            onClick={() => handleOpenEditModal(q)}
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                            title="Edit Question"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenDeleteModal(q)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                            title="Delete Question"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Metadata & Actions */}
@@ -484,17 +667,33 @@ export default function LearningPage() {
                     </div>
 
                     <div className="flex items-center gap-4 text-gray-400">
+                      {(() => {
+                        const uid = getUserId();
+                        const isLikedByMe = Array.isArray(q.likedBy) && q.likedBy.includes(uid);
+                        return (
+                          <button
+                            onClick={() => handleLikeQuestion(q.id)}
+                            className={`flex items-center gap-1 transition cursor-pointer px-2 py-1 rounded-lg ${
+                              isLikedByMe
+                                ? "text-emerald-700 bg-emerald-50 border border-emerald-200 font-extrabold"
+                                : "hover:text-emerald-600 hover:bg-gray-50"
+                            }`}
+                            title={isLikedByMe ? "Click to remove like" : "Click to like"}
+                          >
+                            <ThumbsUp className={`w-3.5 h-3.5 ${isLikedByMe ? "fill-emerald-600 text-emerald-600" : ""}`} />
+                            <span>{q.likes || 0}</span>
+                          </button>
+                        );
+                      })()}
+
                       <button
-                        onClick={() => handleLikeQuestion(q.id)}
-                        className="flex items-center gap-1 hover:text-emerald-600 transition cursor-pointer"
+                        onClick={() => handleOpenQuestionComments(q)}
+                        className="flex items-center gap-1.5 hover:text-emerald-600 hover:bg-emerald-50/50 px-2 py-1 rounded-lg transition cursor-pointer text-gray-500"
+                        title="Click to view and add comments"
                       >
-                        <ThumbsUp className="w-3.5 h-3.5" />
-                        <span>{q.likes}</span>
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{q.replies || 0} Comments</span>
                       </button>
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>{q.replies}</span>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -509,6 +708,19 @@ export default function LearningPage() {
                   >
                     Be the first to ask a question!
                   </button>
+                </div>
+              )}
+
+              {/* SEE MORE / COMMUNITY LINK BUTTON */}
+              {questions.length > 0 && (
+                <div className="pt-2 text-center border-t border-gray-100">
+                  <Link
+                    href="/dashboard/community"
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 transition cursor-pointer"
+                  >
+                    <span>See All Questions in Community Portal ({questions.length})</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               )}
             </div>
@@ -563,15 +775,27 @@ export default function LearningPage() {
             </div>
 
             <div className="space-y-2.5">
-              <div className="p-3 bg-amber-50/40 border border-amber-100 rounded-xl flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
-                  <Award className="w-4 h-4" />
+              {progress.certificatesEarned > 0 ? (
+                <div className="p-3 bg-amber-50/40 border border-amber-100 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-gray-900 leading-tight">Sustainability Specialist</h4>
+                    <span className="text-[9px] text-gray-400 font-medium">Issued on CarbonAware</span>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-extrabold text-gray-900 leading-tight">Sustainability Specialist</h4>
-                  <span className="text-[9px] text-gray-400 font-medium">Issued on CarbonAware • 2026</span>
+              ) : (
+                <div className="p-3 bg-slate-50/80 border border-slate-200/80 rounded-xl flex items-center gap-3 opacity-60 grayscale">
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 text-slate-400 flex items-center justify-center flex-shrink-0">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-600 leading-tight">Sustainability Specialist</h4>
+                    <span className="text-[9px] text-slate-400 font-medium">Complete all topics to earn (Locked)</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -758,6 +982,135 @@ export default function LearningPage() {
         </div>
       )}
 
+      {/* ================= EDIT QUESTION MODAL ================= */}
+      {editingQuestion && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-lg w-full p-6 relative animate-fadeIn space-y-4">
+            <button
+              onClick={() => setEditingQuestion(null)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-700 p-1.5 rounded-xl hover:bg-gray-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1 pr-6">
+              <h3 className="text-lg font-black text-gray-900">Edit Your Question</h3>
+              <p className="text-xs text-gray-500 font-medium">
+                Update the title, category topic, or details of your posted question.
+              </p>
+            </div>
+
+            <form onSubmit={handleUpdateQuestionSubmit} className="space-y-4 pt-2">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700">Question Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-semibold placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-gray-700">Topic</label>
+                  <select
+                    value={editTopic}
+                    onChange={(e) => setEditTopic(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option>Climate Change 101</option>
+                    <option>Carbon Footprint Calculations</option>
+                    <option>Renewable Energy</option>
+                    <option>Sustainable Transportation</option>
+                    <option>Waste Reduction</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-gray-700">Category Tag</label>
+                  <select
+                    value={editTag}
+                    onChange={(e) => setEditTag(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option>Question</option>
+                    <option>Discussion</option>
+                    <option>Tips</option>
+                    <option>Beginner</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700">Description & Details</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingQuestion(null)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 rounded-xl text-xs transition cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {isSubmittingEdit ? "Updating..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= DELETE CONFIRMATION MODAL (YES / NO ALERT) ================= */}
+      {deletingQuestion && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-sm w-full p-6 relative animate-fadeIn space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-gray-900">Delete Question?</h3>
+              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-bold text-gray-800">"{deletingQuestion.title}"</span>? This will permanently erase the question, all its comments, and likes from the database.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingQuestion(null)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer"
+              >
+                No, Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteQuestion}
+                disabled={isDeleting}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= ASK QUESTION MODAL ================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -842,6 +1195,164 @@ export default function LearningPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= EXPLORE ALL TOPICS MODAL ================= */}
+      {isAllTopicsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-4xl w-full p-6 sm:p-8 relative animate-fadeIn space-y-6 max-h-[90vh] overflow-y-auto">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setIsAllTopicsModalOpen(false)}
+              className="absolute right-5 top-5 text-gray-400 hover:text-gray-700 p-2 rounded-2xl hover:bg-gray-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div>
+              <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                ALL SUSTAINABILITY TOPICS
+              </span>
+              <h2 className="text-xl font-black text-gray-900 leading-tight mt-1.5">
+                Explore All Learning Topics
+              </h2>
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                Select any topic to view detailed lessons, interactive quizzes, and earn certificates.
+              </p>
+            </div>
+
+            {/* All Topics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {topics.map((topic) => {
+                const completed = isTopicCompleted(topic.id || topic.slug);
+                return (
+                  <div
+                    key={topic.id || topic.slug}
+                    onClick={() => {
+                      setIsAllTopicsModalOpen(false);
+                      handleOpenTopicModal(topic);
+                    }}
+                    className={`bg-white rounded-2xl border p-4 shadow-[0_4px_20px_rgb(0,0,0,0.015)] flex flex-col justify-between items-center text-center space-y-3 hover:border-emerald-400 hover:shadow-md transition cursor-pointer min-h-[220px] relative ${
+                      completed ? "border-emerald-300 bg-emerald-50/10" : "border-gray-150"
+                    }`}
+                  >
+                    {completed && (
+                      <span className="absolute top-2 right-2 text-emerald-600">
+                        <CheckCircle className="w-4 h-4 fill-emerald-100" />
+                      </span>
+                    )}
+
+                    <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-100 flex items-center justify-center">
+                      {getTopicIcon(topic.icon)}
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-black text-gray-900 leading-snug">{topic.title}</h4>
+                      <p className="text-[10px] text-gray-400 font-medium leading-relaxed line-clamp-2">
+                        {topic.description}
+                      </p>
+                    </div>
+
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                      {topic.lessonsCount || 10} lessons
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= QUESTION COMMENTS & DISCUSSIONS MODAL ================= */}
+      {selectedQuestionModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-2xl w-full p-6 sm:p-7 relative animate-fadeIn space-y-5 max-h-[90vh] overflow-y-auto">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedQuestionModal(null)}
+              className="absolute right-5 top-5 text-gray-400 hover:text-gray-700 p-2 rounded-2xl hover:bg-gray-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Question Details Header */}
+            <div className="space-y-2 border-b border-gray-100 pb-4 pr-8">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                  {selectedQuestionModal.topic}
+                </span>
+                <span className="text-[10px] font-bold text-gray-400">
+                  By {selectedQuestionModal.author}
+                </span>
+              </div>
+              <h3 className="text-base font-black text-gray-900 leading-snug">
+                {selectedQuestionModal.title}
+              </h3>
+              <p className="text-xs text-gray-600 font-medium leading-relaxed bg-gray-50/70 p-3 rounded-xl border border-gray-100">
+                {selectedQuestionModal.description}
+              </p>
+            </div>
+
+            {/* Answers & Comments Section */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
+                <span>Comments ({questionAnswers.length})</span>
+              </h4>
+
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {questionAnswers.map((ans: any) => (
+                  <div key={ans.id} className="p-3 bg-gray-50 rounded-2xl border border-gray-150 space-y-1">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-extrabold text-emerald-700">{ans.author}</span>
+                      <span className="text-gray-400 font-medium">{new Date(ans.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs text-gray-700 font-medium leading-relaxed">{ans.content}</p>
+                  </div>
+                ))}
+
+                {questionAnswers.length === 0 && (
+                  <p className="text-center py-4 text-xs font-bold text-gray-400">
+                    No comments yet. Share your thoughts below!
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Add Comment Form */}
+            <form onSubmit={handleAddCommentSubmit} className="space-y-3 border-t border-gray-100 pt-4">
+              <textarea
+                required
+                rows={3}
+                value={newCommentContent}
+                onChange={(e) => setNewCommentContent(e.target.value)}
+                placeholder="Write your comment or answer..."
+                className="w-full px-4 py-2.5 rounded-2xl border border-gray-200 bg-white text-xs font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedQuestionModal(null)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingComment}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 rounded-xl text-xs transition cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {isSubmittingComment ? "Posting..." : "Post Comment"}
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}

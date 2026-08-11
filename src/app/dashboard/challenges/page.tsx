@@ -30,6 +30,7 @@ export default function ChallengesPage() {
 
   // Quiz & Detail Modal states
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [isAllChallengesModalOpen, setIsAllChallengesModalOpen] = useState(false);
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -47,29 +48,29 @@ export default function ChallengesPage() {
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>({
-    points: 1280,
-    xp: 450,
+    points: 0,
+    xp: 0,
     level: 1,
-    streak: 3,
+    streak: 0,
     challenges: [],
     featuredChallenge: null,
     progress: {
-      completedQuestions: 3,
+      completedQuestions: 0,
       totalQuestions: 10,
-      score: 85,
+      score: 0,
       isCompleted: false,
     },
     badges: [
-      { id: "b1", name: "Eco Beginner", req: "Score 70% or more", color: "emerald", unlocked: true },
-      { id: "b2", name: "Eco Explorer", req: "Score 80% or more", color: "blue", unlocked: true },
-      { id: "b3", name: "Eco Expert", req: "Score 90% or more", color: "purple", unlocked: false },
-      { id: "b4", name: "Eco Champion", req: "Score 100%", color: "amber", unlocked: false },
+      { id: "b1", name: "Eco Beginner", req: "30% Challenge Completion", scoreReq: 30, color: "emerald", unlocked: false },
+      { id: "b2", name: "Eco Explorer", req: "60% Challenge Completion", scoreReq: 60, color: "blue", unlocked: false },
+      { id: "b3", name: "Eco Expert", req: "80% Challenge Completion", scoreReq: 80, color: "purple", unlocked: false },
+      { id: "b4", name: "Eco Champion", req: "90%+ Challenge Completion", scoreReq: 90, color: "amber", unlocked: false },
     ],
     leaderboard: [],
     stats: {
-      challengesCompleted: 2,
-      averageScore: 85,
-      currentStreak: 3,
+      challengesCompleted: 0,
+      averageScore: 0,
+      currentStreak: 0,
     },
     completedChallenges: [],
   });
@@ -215,9 +216,9 @@ export default function ChallengesPage() {
   };
 
   const activeChallenge = selectedChallenge || data.featuredChallenge || data.challenges[0];
-  const completedQuestions = data.progress?.completedQuestions ?? 3;
-  const totalQuestions = data.progress?.totalQuestions ?? 10;
-  const progressPct = Math.round((completedQuestions / totalQuestions) * 100);
+  const completedChallengesCount = (data.completedChallenges || []).length;
+  const totalChallengesCount = (data.challenges || []).length || 1;
+  const progressPct = Math.min(100, Math.round((completedChallengesCount / totalChallengesCount) * 100));
 
   return (
     <div className="flex flex-col space-y-6">
@@ -344,35 +345,71 @@ export default function ChallengesPage() {
               </div>
 
               {/* ALL AVAILABLE CHALLENGES SELECTION LIST */}
-              {data.challenges && data.challenges.length > 1 && (
+              {data.challenges && data.challenges.length > 0 && (
                 <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-3">
-                  <h4 className="text-xs font-black text-gray-900">Explore More Challenges</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {data.challenges.map((c: any) => (
-                      <div
-                        key={c.id}
-                        onClick={() => openQuizModal(c)}
-                        className="p-3.5 rounded-xl border border-gray-150 hover:border-emerald-300 hover:bg-emerald-50/30 transition cursor-pointer flex items-center justify-between space-x-3 group"
-                      >
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                            {c.category} • {c.difficulty}
-                          </span>
-                          <h5 className="text-xs font-black text-gray-900 group-hover:text-emerald-700 transition">
-                            {c.title}
-                          </h5>
-                          <p className="text-[10px] text-gray-400 line-clamp-1">{c.description}</p>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-xs font-black text-gray-900">Explore More Challenges</h4>
+                      <p className="text-[10px] text-gray-400 font-medium">Take quizzes to earn Eco Points & Badges</p>
+                    </div>
+
+                    <button
+                      onClick={() => setIsAllChallengesModalOpen(true)}
+                      className="text-xs font-extrabold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    >
+                      <span>Explore All Challenges ({data.challenges.length})</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {data.challenges.slice(0, 3).map((c: any) => {
+                      const isCompleted = (data.completedChallenges || []).some(
+                        (item: any) => item.id === c.id || item.title === c.title
+                      );
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => openQuizModal(c)}
+                          className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between space-y-2 group min-h-[110px] relative ${
+                            isCompleted ? "border-emerald-300 bg-emerald-50/20" : "border-gray-150 hover:border-emerald-300 hover:bg-emerald-50/30"
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                {c.category} • {c.difficulty}
+                              </span>
+                              {isCompleted && (
+                                <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" /> Completed
+                                </span>
+                              )}
+                            </div>
+                            <h5 className="text-xs font-black text-gray-900 group-hover:text-emerald-700 transition leading-snug">
+                              {c.title}
+                            </h5>
+                            <p className="text-[10px] text-gray-400 line-clamp-1 font-medium">{c.description}</p>
+                          </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[10px] text-emerald-600 font-extrabold">
+                            <span>+{c.rewardPoints || 100} Points</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-600" />
+                          </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 flex-shrink-0" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {/* YOUR PROGRESS CARD */}
               <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-3">
-                <h4 className="text-xs font-black text-gray-900">Your Progress</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-gray-900">Your Overall Progress</h4>
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                    {progressPct}% Completed
+                  </span>
+                </div>
                 
                 <div className="flex items-center gap-4">
                   <div className="h-2.5 bg-emerald-50 rounded-full flex-grow overflow-hidden border border-emerald-100">
@@ -382,12 +419,12 @@ export default function ChallengesPage() {
                     />
                   </div>
                   <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
-                    {completedQuestions} / {totalQuestions} Questions Completed
+                    {completedChallengesCount} / {totalChallengesCount} Challenges Completed
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-semibold pt-1">
-                  <span>💡 Keep going! Complete the quiz to earn {data.featuredChallenge?.rewardPoints || 100} points.</span>
+                  <span>💡 Complete all eco-challenges to maximize your Eco Points & unlock master badges!</span>
                 </div>
               </div>
 
@@ -602,32 +639,38 @@ export default function ChallengesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               {data.badges.map((b: any) => {
+                const reqScore = b.scoreReq || (b.name.includes("Beginner") ? 30 : b.name.includes("Explorer") ? 60 : b.name.includes("Expert") ? 80 : 90);
+                const isUnlocked = b.unlocked || progressPct >= reqScore;
+
                 const getIcon = () => {
-                  if (b.name.includes("Beginner")) return <CheckCircle className="w-6 h-6" />;
-                  if (b.name.includes("Explorer")) return <Globe className="w-6 h-6" />;
-                  if (b.name.includes("Expert")) return <Shield className="w-6 h-6" />;
-                  return <Trophy className="w-6 h-6" />;
+                  if (b.name.includes("Beginner")) return <CheckCircle className="w-6 h-6 text-emerald-600" />;
+                  if (b.name.includes("Explorer")) return <Globe className="w-6 h-6 text-blue-600" />;
+                  if (b.name.includes("Expert")) return <Shield className="w-6 h-6 text-purple-600" />;
+                  return <Trophy className="w-6 h-6 text-amber-600" />;
                 };
 
                 const getColor = () => {
-                  if (b.color === "emerald") return "bg-emerald-50/30 border-emerald-100 text-emerald-600 bg-emerald-100";
-                  if (b.color === "blue") return "bg-blue-50/30 border-blue-100 text-blue-600 bg-blue-100";
-                  if (b.color === "purple") return "bg-purple-50/30 border-purple-100 text-purple-600 bg-purple-100";
-                  return "bg-amber-50/30 border-amber-100 text-amber-600 bg-amber-100";
+                  if (b.color === "emerald" || b.name.includes("Beginner")) return "bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-sm";
+                  if (b.color === "blue" || b.name.includes("Explorer")) return "bg-blue-50/70 border-blue-200 text-blue-900 shadow-sm";
+                  if (b.color === "purple" || b.name.includes("Expert")) return "bg-purple-50/70 border-purple-200 text-purple-900 shadow-sm";
+                  return "bg-amber-50/70 border-amber-200 text-amber-900 shadow-sm";
                 };
 
                 return (
                   <div
                     key={b.id}
-                    className={`border p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 ${
-                      b.unlocked ? getColor() : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
+                    className={`border p-3.5 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all ${
+                      isUnlocked ? getColor() : "bg-slate-50/70 border-slate-200 text-slate-400 opacity-40 grayscale"
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${b.unlocked ? "" : "bg-gray-200 text-gray-400"}`}>
-                      {getIcon()}
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center ${isUnlocked ? "bg-white shadow-xs" : "bg-slate-200/70 text-slate-400"}`}>
+                      {isUnlocked ? getIcon() : <Shield className="w-5 h-5 opacity-50" />}
                     </div>
-                    <span className="text-xs font-black text-gray-900 leading-tight">{b.name}</span>
-                    <span className="text-[9px] text-gray-400 font-bold">{b.req}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-black text-gray-900 leading-tight">{b.name}</span>
+                      {!isUnlocked && <span className="text-[9px] text-slate-400 font-extrabold">(Locked)</span>}
+                    </div>
+                    <span className="text-[9px] text-gray-500 font-bold">{b.req || `${reqScore}% Progress`}</span>
                   </div>
                 );
               })}
@@ -835,6 +878,92 @@ export default function ChallengesPage() {
                 </div>
               </div>
             )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= EXPLORE ALL CHALLENGES MODAL ================= */}
+      {isAllChallengesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-4xl w-full p-6 sm:p-8 relative animate-fadeIn space-y-6 max-h-[90vh] overflow-y-auto">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setIsAllChallengesModalOpen(false)}
+              className="absolute right-5 top-5 text-gray-400 hover:text-gray-700 p-2 rounded-2xl hover:bg-gray-100 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div>
+              <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                ALL SUSTAINABILITY CHALLENGES
+              </span>
+              <h2 className="text-xl font-black text-gray-900 leading-tight mt-1.5">
+                Explore All Eco Challenges
+              </h2>
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                Select any challenge quiz to test your sustainability knowledge, earn Eco Points & unlock badges.
+              </p>
+            </div>
+
+            {/* All Challenges Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {data.challenges?.map((c: any) => {
+                const isCompleted = (data.completedChallenges || []).some(
+                  (item: any) => item.id === c.id || item.title === c.title
+                );
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setIsAllChallengesModalOpen(false);
+                      openQuizModal(c);
+                    }}
+                    className={`bg-white rounded-2xl border p-4 shadow-[0_4px_20px_rgb(0,0,0,0.015)] flex flex-col justify-between space-y-3 hover:border-emerald-400 hover:shadow-md transition cursor-pointer group min-h-[160px] ${
+                      isCompleted ? "border-emerald-300 bg-emerald-50/15" : "border-gray-150"
+                    }`}
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                          {c.category}
+                        </span>
+                        {isCompleted ? (
+                          <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> Completed
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-gray-400">
+                            {c.difficulty}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="text-xs font-black text-gray-900 group-hover:text-emerald-700 transition leading-snug">
+                        {c.title}
+                      </h4>
+
+                      <p className="text-[10px] text-gray-500 font-medium leading-relaxed line-clamp-2">
+                        {c.description}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-[10px] font-extrabold text-emerald-600">
+                      <span className="flex items-center gap-1 text-amber-600">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                        +{c.rewardPoints || 100} Points
+                      </span>
+                      <span className="flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                        {isCompleted ? "Retake Quiz" : "Start Quiz"} <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
           </div>
         </div>

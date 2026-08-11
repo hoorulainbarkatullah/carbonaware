@@ -14,7 +14,10 @@ import {
   Zap,
   BookOpen,
   Trophy,
-  Award
+  Award,
+  CheckCircle,
+  Globe,
+  Shield
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -422,35 +425,53 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* CARD 3A: BADGES */}
-            <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between min-h-[220px]">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-extrabold text-gray-900">Your Badges</h3>
+            <section className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between min-h-[280px]">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-extrabold text-gray-900">Your Badges</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">Earn badges by completing challenges.</p>
+                </div>
                 <Link href="/dashboard/challenges" className="text-emerald-600 hover:text-emerald-700 text-xs font-bold transition cursor-pointer">
                   See all
                 </Link>
               </div>
 
-              <div className="grid grid-cols-5 gap-2.5 flex-grow items-center">
-                {badges.map((badge, idx) => (
-                  <div key={idx} className="flex flex-col items-center text-center group cursor-pointer">
+              <div className="grid grid-cols-2 gap-3 flex-grow items-center">
+                {badges.map((badge, idx) => {
+                  const isUnlocked = badge.active && !badge.locked;
+
+                  const getIcon = () => {
+                    if (badge.name.includes("Beginner")) return <CheckCircle className="w-6 h-6 text-emerald-600" />;
+                    if (badge.name.includes("Explorer")) return <Globe className="w-6 h-6 text-blue-600" />;
+                    if (badge.name.includes("Expert")) return <Shield className="w-6 h-6 text-purple-600" />;
+                    return <Trophy className="w-6 h-6 text-amber-600" />;
+                  };
+
+                  const getColor = () => {
+                    if (badge.name.includes("Beginner")) return "bg-emerald-50/70 border-emerald-200 text-emerald-900 shadow-sm";
+                    if (badge.name.includes("Explorer")) return "bg-blue-50/70 border-blue-200 text-blue-900 shadow-sm";
+                    if (badge.name.includes("Expert")) return "bg-purple-50/70 border-purple-200 text-purple-900 shadow-sm";
+                    return "bg-amber-50/70 border-amber-200 text-amber-900 shadow-sm";
+                  };
+
+                  return (
                     <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all duration-200 group-hover:scale-105 ${
-                        badge.locked || !badge.active
-                          ? "bg-gray-50 text-gray-300 border-gray-200"
-                          : badge.color || "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]"
+                      key={idx}
+                      className={`border p-3 rounded-2xl flex flex-col items-center text-center space-y-1.5 transition-all ${
+                        isUnlocked ? getColor() : "bg-slate-50/70 border-slate-200 text-slate-400 opacity-40 grayscale"
                       }`}
                     >
-                      {badge.locked || !badge.active ? (
-                        <Lock className="w-5 h-5 text-gray-300" />
-                      ) : (
-                        <ShieldCheck className="w-6 h-6" />
-                      )}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isUnlocked ? "bg-white shadow-xs" : "bg-slate-200/70 text-slate-400"}`}>
+                        {isUnlocked ? getIcon() : <Shield className="w-5 h-5 opacity-50" />}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-black text-gray-900 leading-tight">{badge.name}</span>
+                        {!isUnlocked && <span className="text-[9px] text-slate-400 font-extrabold">(Locked)</span>}
+                      </div>
+                      <span className="text-[9px] text-gray-500 font-bold">{badge.desc || badge.req || "Completion Requirement"}</span>
                     </div>
-                    <span className="text-[9px] font-bold text-gray-600 mt-2 line-clamp-2 leading-tight">
-                      {badge.name}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 

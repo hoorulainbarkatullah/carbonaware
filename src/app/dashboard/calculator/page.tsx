@@ -18,7 +18,8 @@ import {
   Users,
   Calculator,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 export default function CalculatorPage() {
@@ -32,27 +33,27 @@ export default function CalculatorPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // --- Transport Input States ---
-  const [fromLocation, setFromLocation] = useState("DHA Phase 5, Lahore");
-  const [toLocation, setToLocation] = useState("Arfa Software House, Lahore");
+  const [fromLocation, setFromLocation] = useState("");
+  const [toLocation, setToLocation] = useState("");
   const [transportType, setTransportType] = useState<"car" | "motorbike" | "bus" | "train" | "bicycle" | "walking">("car");
   const [fuelType, setFuelType] = useState<"Petrol" | "Diesel" | "Hybrid" | "Electric">("Petrol");
-  const [distanceKm, setDistanceKm] = useState<number>(24);
-  const [tripsPerWeek, setTripsPerWeek] = useState<number>(5);
+  const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [tripsPerWeek, setTripsPerWeek] = useState<number>(0);
 
   // --- Food & Waste Input States ---
   const [dietType, setDietType] = useState<"vegan" | "vegetarian" | "mixed" | "meat-heavy">("mixed");
-  const [mealsPerDay, setMealsPerDay] = useState<number>(3);
-  const [localFoodPct, setLocalFoodPct] = useState<number>(50);
+  const [mealsPerDay, setMealsPerDay] = useState<number>(0);
+  const [localFoodPct, setLocalFoodPct] = useState<number>(0);
   const [foodWasteLevel, setFoodWasteLevel] = useState<"low" | "medium" | "high">("low");
   const [wasteMgmt, setWasteMgmt] = useState<"recycle" | "compost" | "sometimes" | "never">("recycle");
 
   // --- Calculations ---
-  const [transportFootprint, setTransportFootprint] = useState<number>(1.00);
-  const [foodFootprint, setFoodFootprint] = useState<number>(0.18);
-  const [totalFootprint, setTotalFootprint] = useState<number>(1.18);
+  const [transportFootprint, setTransportFootprint] = useState<number>(0.0);
+  const [foodFootprint, setFoodFootprint] = useState<number>(0.0);
+  const [totalFootprint, setTotalFootprint] = useState<number>(0.0);
 
-  const [transportPct, setTransportPct] = useState<number>(85);
-  const [foodPct, setFoodPct] = useState<number>(15);
+  const [transportPct, setTransportPct] = useState<number>(50);
+  const [foodPct, setFoodPct] = useState<number>(50);
 
   // Helper to retrieve logged in user ID or email
   const getUserId = () => {
@@ -187,10 +188,53 @@ export default function CalculatorPage() {
     }
   }, [transportFootprint, foodFootprint]);
 
+  // Auto-dismiss alert messages after 4 seconds
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
   // Clear alert banners
   const clearAlerts = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+  };
+
+  // Clear / Reset Calculator function to start fresh calculation
+  const handleClearCalculator = () => {
+    clearAlerts();
+    setCalculationId(null);
+    setIsCompleted(false);
+
+    setFromLocation("");
+    setToLocation("");
+    setTransportType("car");
+    setFuelType("Petrol");
+    setDistanceKm(0);
+    setTripsPerWeek(0);
+
+    setDietType("mixed");
+    setMealsPerDay(0);
+    setLocalFoodPct(0);
+    setFoodWasteLevel("low");
+    setWasteMgmt("recycle");
+
+    setTransportFootprint(0.0);
+    setFoodFootprint(0.0);
+    setTotalFootprint(0.0);
+    setTransportPct(50);
+    setFoodPct(50);
+
+    setSuccessMessage("Calculator reset! You can now calculate new footprint data.");
   };
 
   // Handle Calculate Transport action
@@ -370,6 +414,9 @@ export default function CalculatorPage() {
           >
             <Car className="w-4.5 h-4.5" />
             <span>Transport</span>
+            {transportFootprint > 0 && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" title="Transport calculated" />
+            )}
           </button>
           
           <button
@@ -382,48 +429,88 @@ export default function CalculatorPage() {
           >
             <UtensilsCrossed className="w-4.5 h-4.5" />
             <span>Food & Waste</span>
+            {foodFootprint > 0 && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm" title="Food calculated" />
+            )}
           </button>
         </div>
 
-        {/* Small Planet Banner */}
-        <div className="bg-[#dcfce7]/60 border border-emerald-100 text-[#15803d] px-4 py-2.5 rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-sm">
-          <span>Every small step helps to save our planet! 🌍</span>
+        {/* Small Planet Banner & Clear Calculator Button */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleClearCalculator}
+            className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 hover:text-red-700 px-4 py-2.5 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+            title="Clear all calculator inputs and start fresh"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Clear Calculator</span>
+          </button>
+
+          <div className="bg-[#dcfce7]/60 border border-emerald-100 text-[#15803d] px-4 py-2.5 rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-sm">
+            <span>Every small step helps to save our planet! 🌍</span>
+          </div>
         </div>
       </div>
 
       {/* ALERT BANNERS */}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-          <span>{errorMessage}</span>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-red-400 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-100 cursor-pointer"
+            title="Close message"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <span>{successMessage}</span>
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="text-emerald-500 hover:text-emerald-800 transition p-1 rounded-lg hover:bg-emerald-100 cursor-pointer"
+            title="Close message"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* 3-COLUMN RESPONSIVE LAYOUT */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+      {/* 2-COLUMN RESPONSIVE LAYOUT (Single active tab form + Results Summary) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         
-        {/* COLUMN 1: TRANSPORT FOOTPRINT */}
-        <div className={`bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between min-h-[580px] ${
-          activeTab === "transport" ? "block animate-fadeIn" : "hidden xl:block"
-        }`}>
-          <div className="space-y-4">
-            {/* Title */}
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl mt-0.5">
-                <Car className="w-5 h-5" />
+        {/* COLUMN 1: ACTIVE TAB FORM (Transport OR Food & Waste) */}
+        {activeTab === "transport" ? (
+          <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between min-h-[580px] animate-fadeIn">
+            <div className="space-y-4">
+              {/* Title & Active Badge */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl mt-0.5">
+                    <Car className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900">1. Transport Footprint</h3>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your daily commute</p>
+                  </div>
+                </div>
+
+                {transportFootprint > 0 && (
+                  <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Calculated
+                  </span>
+                )}
               </div>
-              <div>
-                <h3 className="text-sm font-black text-gray-900">1. Transport Footprint</h3>
-                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your daily commute</p>
-              </div>
-            </div>
 
             {/* Commute Inputs */}
             <div className="space-y-3.5 pt-2">
@@ -568,23 +655,29 @@ export default function CalculatorPage() {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between min-h-[580px] animate-fadeIn">
+            <div className="space-y-4">
+              {/* Title & Active Badge */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl mt-0.5">
+                    <UtensilsCrossed className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900">2. Food & Waste Footprint</h3>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your diet and waste habits</p>
+                  </div>
+                </div>
 
-        {/* COLUMN 2: FOOD & WASTE FOOTPRINT */}
-        <div className={`bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between min-h-[580px] ${
-          activeTab === "food" ? "block animate-fadeIn" : "hidden xl:block"
-        }`}>
-          <div className="space-y-4">
-            {/* Title */}
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl mt-0.5">
-                <UtensilsCrossed className="w-5 h-5" />
+                {foodFootprint > 0 && (
+                  <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Calculated
+                  </span>
+                )}
               </div>
-              <div>
-                <h3 className="text-sm font-black text-gray-900">2. Food & Waste Footprint</h3>
-                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Calculate emissions from your diet and waste habits</p>
-              </div>
-            </div>
 
             {/* Form Inputs */}
             <div className="space-y-4 pt-2">
@@ -621,10 +714,10 @@ export default function CalculatorPage() {
                   <div className="relative">
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       max="10"
                       value={mealsPerDay}
-                      onChange={(e) => setMealsPerDay(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => setMealsPerDay(Math.max(0, parseInt(e.target.value) || 0))}
                       className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">meals</span>
@@ -705,8 +798,9 @@ export default function CalculatorPage() {
             </button>
           </div>
         </div>
+        )}
 
-        {/* COLUMN 3: YOUR CARBON FOOTPRINT RESULTS */}
+        {/* COLUMN 2: YOUR CARBON FOOTPRINT RESULTS */}
         <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between min-h-[580px]">
           
           <div className="space-y-5">

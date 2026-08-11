@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildUserWhereClause } from "@/lib/db-utils";
+import clientPromise from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
 
@@ -29,45 +30,36 @@ export async function GET(request: Request) {
       });
     }
 
-    // Community Highlights / Leaderboard
-    let highlights = await (prisma as any).communityLeaderboard.findMany({
-      orderBy: { rank: "asc" },
-      take: 3,
+    // Community Highlights / Real MongoDB Users Leaderboard
+    const client = await clientPromise;
+    const mongoDb = client.db("carbon_aware");
+    const mongoUsers = await mongoDb.collection("users").find({}).sort({ points: -1 }).toArray();
+
+    const realUsers = mongoUsers
+      .map((u: any) => ({
+        id: u._id.toString(),
+        name: u.name || "User",
+        email: u.email || "",
+        role: u.role || (u.email && u.email.toLowerCase().includes("admin") ? "admin" : "user"),
+        points: u.points ?? 0,
+      }))
+      .filter((u) => u.role !== "admin" && !u.email.toLowerCase().includes("admin"));
+
+    const highlights = realUsers.slice(0, 5).map((u, idx) => {
+      let badge = "Active Learner";
+      if (idx === 0) badge = "Eco Champion";
+      else if (idx === 1) badge = "Active Contributor";
+      else if (idx === 2) badge = "Rising Star";
+
+      return {
+        id: u.id,
+        rank: idx + 1,
+        name: u.name,
+        badge,
+        subTitle: `Rank #${idx + 1} • ${u.points} Eco Points`,
+        points: u.points,
+      };
     });
-
-    if (highlights.length === 0) {
-      const defaultHighlights = [
-        {
-          name: "Sara Ahmed",
-          badge: "Eco Champion",
-          subTitle: "Top Contributor this week",
-          points: 245,
-          rank: 1,
-        },
-        {
-          name: "Ali Raza",
-          badge: "Active Member",
-          subTitle: "Helped 18 people",
-          points: 180,
-          rank: 2,
-        },
-        {
-          name: "Noor Fatima",
-          badge: "Rising Star",
-          subTitle: "Great questions & answers",
-          points: 150,
-          rank: 3,
-        },
-      ];
-
-      for (const h of defaultHighlights) {
-        await (prisma as any).communityLeaderboard.create({ data: h });
-      }
-
-      highlights = await (prisma as any).communityLeaderboard.findMany({
-        orderBy: { rank: "asc" },
-      });
-    }
 
     return NextResponse.json({
       success: true,

@@ -7,7 +7,8 @@ import {
   Bell,
   Check,
   Info,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -27,6 +28,21 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-dismiss alert timers
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (saved) {
+      const timer = setTimeout(() => setSaved(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [saved]);
 
   // Load user data from localStorage and DB
   useEffect(() => {
@@ -122,9 +138,18 @@ export default function SettingsPage() {
     <div className="flex flex-col space-y-6 max-w-4xl"> 
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-          <span>{errorMessage}</span>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-red-400 hover:text-red-700 transition p-1 rounded-lg hover:bg-red-100 cursor-pointer"
+            title="Close message"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

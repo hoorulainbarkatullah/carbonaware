@@ -49,7 +49,7 @@ export default function Hero() {
           {/* Buttons */}
           <div className="mt-10 flex flex-wrap gap-4">
             <Link
-              href="#signup"
+              href="/signup"
               className="group inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-base font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:bg-primary-hover"
             >
               <span>Get Started</span>

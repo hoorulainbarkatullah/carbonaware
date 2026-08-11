@@ -26,7 +26,7 @@ export default function Navbar() {
     if (stored) {
       try {
         setUser(JSON.parse(stored));
-      } catch (e) {}
+      } catch (e) { }
     } else {
       setUser(null);
     }
@@ -93,11 +93,10 @@ export default function Navbar() {
 
   return (
     <header
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        hasScrolled
-          ? "bg-white/95 backdrop-blur-md shadow-md border-b border-border-gray/50 py-3"
-          : "bg-white py-4"
-      }`}
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${hasScrolled
+        ? "bg-white/95 backdrop-blur-md shadow-md border-b border-border-gray/50 py-3"
+        : "bg-white py-4"
+        }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
@@ -123,9 +122,8 @@ export default function Navbar() {
                 key={item.label}
                 href={item.href}
                 onClick={() => setActiveItem(item.label)}
-                className={`relative px-1 py-2 text-sm font-semibold transition-colors duration-200 hover:text-primary ${
-                  activeItem === item.label ? "text-primary" : "text-body"
-                }`}
+                className={`relative px-1 py-2 text-sm font-semibold transition-colors duration-200 hover:text-primary ${activeItem === item.label ? "text-primary" : "text-body"
+                  }`}
               >
                 {item.label}
                 {activeItem === item.label && (
@@ -233,11 +231,10 @@ export default function Navbar() {
                   setActiveItem(item.label);
                   setIsMobileMenuOpen(false);
                 }}
-                className={`block px-4 py-2.5 rounded-lg text-base font-semibold transition-colors ${
-                  activeItem === item.label
-                    ? "bg-accent-green text-primary"
-                    : "text-body hover:bg-section-bg hover:text-primary"
-                }`}
+                className={`block px-4 py-2.5 rounded-lg text-base font-semibold transition-colors ${activeItem === item.label
+                  ? "bg-accent-green text-primary"
+                  : "text-body hover:bg-section-bg hover:text-primary"
+                  }`}
               >
                 {item.label}
               </a>
