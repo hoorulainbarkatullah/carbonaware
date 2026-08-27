@@ -23,22 +23,22 @@ export default function Hero() {
         {/* Background Image Container (Right Side with Left Gradient Fade) */}
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <div
-            className="absolute top-0 right-0 w-full lg:w-[70%] h-full bg-no-repeat bg-cover bg-center lg:bg-right-top"
+            className="absolute top-0 right-0 w-full lg:w-[70%] h-full bg-no-repeat bg-cover bg-center lg:bg-right-top opacity-30 lg:opacity-100 transition-opacity"
             style={{ backgroundImage: `url('/hero-illustration.png')` }}
           />
-          {/* Soft Left White Fade Overlay */}
-          <div className="absolute top-0 left-0 w-full lg:w-[50%] h-full bg-gradient-to-r from-white via-white/90 to-transparent" />
+          {/* Soft Mobile/Desktop White Fade Overlay */}
+          <div className="absolute top-0 left-0 w-full lg:w-[50%] h-full bg-gradient-to-b from-white via-white/95 to-white/80 lg:bg-gradient-to-r lg:from-white lg:via-white/90 lg:to-transparent" />
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24 w-full">
-          <div className="max-w-xl flex flex-col items-start">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 lg:py-24 w-full">
+          <div className="max-w-xl flex flex-col items-center sm:items-start text-center sm:text-left">
 
             {/* Main Headline */}
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black text-gray-900 leading-[1.1] tracking-tight"
+              className="text-3xl sm:text-5xl lg:text-6xl font-black text-gray-900 leading-[1.15] sm:leading-[1.1] tracking-tight"
             >
               Track Your Carbon. <br />
               <span className="text-emerald-700">Change Your Future.</span>
@@ -49,7 +49,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="mt-6 text-sm sm:text-base text-gray-600 font-medium leading-relaxed max-w-lg"
+              className="mt-4 sm:mt-6 text-xs sm:text-base text-gray-600 font-medium leading-relaxed max-w-lg"
             >
               Calculate your carbon footprint, understand your impact, learn with interactive lessons, take challenges and be part of a community working for a greener tomorrow.
             </motion.p>
@@ -59,11 +59,11 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="mt-10 flex flex-wrap gap-4 items-center"
+              className="mt-6 sm:mt-10 flex flex-col sm:flex-row w-full sm:w-auto gap-3.5 sm:gap-4 items-stretch sm:items-center"
             >
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-800/20 transition-all hover:-translate-y-0.5 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-800/20 transition-all hover:-translate-y-0.5 cursor-pointer"
               >
                 <span>Get Started Now</span>
                 <ArrowRight className="w-4 h-4" />
@@ -71,7 +71,7 @@ export default function Hero() {
 
               <a
                 href="#features"
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-100 bg-white/90 backdrop-blur-sm hover:bg-gray-50 px-6 py-3.5 text-sm font-bold text-gray-800 shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-100 bg-white/90 backdrop-blur-sm hover:bg-gray-50 px-6 py-3.5 text-sm font-bold text-gray-800 shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
               >
                 <BookOpen className="w-4 h-4 text-emerald-700" />
                 <span>Learn How It Works</span>
@@ -83,31 +83,31 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="mt-12 grid grid-cols-4 gap-3 sm:gap-4 w-full max-w-md"
+              className="mt-8 sm:mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 w-full max-w-md"
             >
-              <Link href="/dashboard/calculator" className="flex flex-col items-center text-center group cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
+              <Link href="/dashboard/calculator" className="flex flex-col items-center text-center group cursor-pointer p-2 rounded-xl hover:bg-gray-50/80 transition-colors">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
                   <Leaf className="w-5 h-5" />
                 </div>
                 <span className="mt-2 text-[10px] sm:text-[11px] font-bold text-gray-800 leading-tight group-hover:text-emerald-800">Track Emissions</span>
               </Link>
 
-              <Link href="/dashboard/learning" className="flex flex-col items-center text-center group cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
+              <Link href="/dashboard/learning" className="flex flex-col items-center text-center group cursor-pointer p-2 rounded-xl hover:bg-gray-50/80 transition-colors">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <span className="mt-2 text-[10px] sm:text-[11px] font-bold text-gray-800 leading-tight group-hover:text-emerald-800">Learn & Grow</span>
               </Link>
 
-              <Link href="/dashboard/challenges" className="flex flex-col items-center text-center group cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
+              <Link href="/dashboard/challenges" className="flex flex-col items-center text-center group cursor-pointer p-2 rounded-xl hover:bg-gray-50/80 transition-colors">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
                   <Trophy className="w-5 h-5" />
                 </div>
                 <span className="mt-2 text-[10px] sm:text-[11px] font-bold text-gray-800 leading-tight group-hover:text-emerald-800">Take Challenges</span>
               </Link>
 
-              <Link href="/dashboard/community" className="flex flex-col items-center text-center group cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
+              <Link href="/dashboard/community" className="flex flex-col items-center text-center group cursor-pointer p-2 rounded-xl hover:bg-gray-50/80 transition-colors">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white border border-gray-100 shadow-xs flex items-center justify-center text-emerald-700 group-hover:bg-emerald-50 group-hover:border-emerald-300 transition-all">
                   <Users className="w-5 h-5" />
                 </div>
                 <span className="mt-2 text-[10px] sm:text-[11px] font-bold text-gray-800 leading-tight group-hover:text-emerald-800">Join Community</span>

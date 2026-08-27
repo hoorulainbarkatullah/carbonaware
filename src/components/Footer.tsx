@@ -76,37 +76,37 @@ export default function Footer() {
               Platform
             </h4>
             <ul className="space-y-2 text-xs font-semibold text-white/70">
+              <li><Link href="#overview" className="hover:text-white transition-colors">Overview</Link></li>
               <li><Link href="#features" className="hover:text-white transition-colors">Features</Link></li>
-              <li><Link href="#how-it-works" className="hover:text-white transition-colors">How It Works</Link></li>
-              <li><a href="#" className="hover:text-white transition-colors">Dashboard</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Challenges</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">AI Recommendations</a></li>
+              <li><Link href="#why-choose-us" className="hover:text-white transition-colors">Why Choose Us</Link></li>
+              <li><Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
+              <li><Link href="/dashboard/calculator" className="hover:text-white transition-colors">Calculator</Link></li>
             </ul>
           </div>
 
-          {/* Column 3: Company Links */}
+          {/* Column 3: Features Links */}
           <div className="flex flex-col space-y-3">
             <h4 className="text-sm font-bold uppercase tracking-wider text-secondary-green">
-              Company
+              Features
             </h4>
             <ul className="space-y-2 text-xs font-semibold text-white/70">
-              <li><Link href="#about-us" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
+              <li><Link href="/dashboard/challenges" className="hover:text-white transition-colors">Challenges & Badges</Link></li>
+              <li><Link href="/dashboard/ai-recommendations" className="hover:text-white transition-colors">AI Recommendations</Link></li>
+              <li><Link href="/dashboard/learning" className="hover:text-white transition-colors">Learning Hub</Link></li>
+              <li><Link href="/dashboard/community" className="hover:text-white transition-colors">Community Forum</Link></li>
+              <li><Link href="/dashboard/history" className="hover:text-white transition-colors">History Logs</Link></li>
             </ul>
           </div>
 
-          {/* Column 4: Support Links */}
+          {/* Column 4: Support & Legal */}
           <div className="flex flex-col space-y-3">
             <h4 className="text-sm font-bold uppercase tracking-wider text-secondary-green">
               Support
             </h4>
             <ul className="space-y-2 text-xs font-semibold text-white/70">
-              <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">FAQs</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Community Guidelines</a></li>
+              <li><Link href="#impact" className="hover:text-white transition-colors">Impact Banner</Link></li>
+              <li><Link href="/signup" className="hover:text-white transition-colors">Get Started</Link></li>
+              <li><Link href="/signin" className="hover:text-white transition-colors">Sign In</Link></li>
             </ul>
           </div>
 

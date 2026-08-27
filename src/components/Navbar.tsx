@@ -7,9 +7,10 @@ import { useRouter } from "next/navigation";
 
 const navItems = [
   { label: "Home", href: "#home" },
+  { label: "Overview", href: "#overview" },
   { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "About Us", href: "#about-us" },
+  { label: "Why Choose Us", href: "#why-choose-us" },
+  { label: "Impact", href: "#impact" },
 ];
 
 export default function Navbar() {

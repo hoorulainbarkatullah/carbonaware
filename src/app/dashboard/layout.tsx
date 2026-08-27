@@ -116,7 +116,7 @@ export default function DashboardLayout({
     syncUserSession();
     window.addEventListener("userUpdated", syncUserSession);
     return () => window.removeEventListener("userUpdated", syncUserSession);
-  }, [router, pathname]);
+  }, []);
 
   // Outside clicks
   useEffect(() => {

@@ -18,11 +18,11 @@ import {
 
 export default function Features() {
   return (
-    <div id="features" className="pt-12 pb-16 lg:pt-16 lg:pb-24 space-y-16 lg:space-y-20 bg-white">
+    <div className="pt-12 pb-16 lg:pt-16 lg:pb-24 space-y-16 lg:space-y-24 bg-white">
 
 
       {/* 2. DASHBOARD SHOWCASE SECTION (IMAGE 1 SECTION 3 & IMAGE 3) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="overview" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           {/* Left Text Column */}
@@ -61,7 +61,7 @@ export default function Features() {
 
 
       {/* 3. CORE FEATURES 6-CARD GRID (MATCHING UI SCREENSHOT EXACTLY) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="text-center max-w-3xl mx-auto mb-14 lg:mb-16 flex flex-col items-center">
           <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3 block">
             Our Core Features
@@ -71,7 +71,7 @@ export default function Features() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           
           {/* Feature 1: Calculator */}
           <Link href="/dashboard/calculator" className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col items-center text-center space-y-3 hover:border-emerald-300 hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer">
@@ -143,8 +143,72 @@ export default function Features() {
       </section>
 
 
+      {/* 3.5 WHY CHOOSE US SECTION */}
+      <section id="why-choose-us" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
+        <div className="text-center max-w-3xl mx-auto mb-12 flex flex-col items-center">
+          <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3 block">
+            Why Choose CarbonAware
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight leading-tight">
+            Empowering Every Step Toward Sustainability
+          </h2>
+          <p className="mt-3 text-sm text-gray-600 font-medium leading-relaxed">
+            Built for individuals and communities to easily measure, understand, and reduce carbon emissions.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          {/* Pillar 1 */}
+          <div className="bg-[#f7faf8] p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-xs flex flex-col items-start space-y-4 hover:border-emerald-300 hover:shadow-md transition-all group">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-800 text-white flex items-center justify-center shadow-sm group-hover:bg-emerald-900 transition-colors">
+              <Calculator className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">Precision Tracking</h3>
+            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+              Accurate, real-time calculations for transport, home energy, and dietary emissions tailored to daily habits.
+            </p>
+          </div>
+
+          {/* Pillar 2 */}
+          <div className="bg-[#f7faf8] p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-xs flex flex-col items-start space-y-4 hover:border-emerald-300 hover:shadow-md transition-all group">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-800 text-white flex items-center justify-center shadow-sm group-hover:bg-emerald-900 transition-colors">
+              <Trophy className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">Gamified Milestones</h3>
+            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+              Earn Eco-Points, complete sustainability challenges, and unlock tiered badges to celebrate green actions.
+            </p>
+          </div>
+
+          {/* Pillar 3 */}
+          <div className="bg-[#f7faf8] p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-xs flex flex-col items-start space-y-4 hover:border-emerald-300 hover:shadow-md transition-all group">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-800 text-white flex items-center justify-center shadow-sm group-hover:bg-emerald-900 transition-colors">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">AI Climate Insights</h3>
+            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+              Personalized recommendations generated dynamically to help you cut emissions where it matters most.
+            </p>
+          </div>
+
+          {/* Pillar 4 */}
+          <div className="bg-[#f7faf8] p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-xs flex flex-col items-start space-y-4 hover:border-emerald-300 hover:shadow-md transition-all group">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-800 text-white flex items-center justify-center shadow-sm group-hover:bg-emerald-900 transition-colors">
+              <Users className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">Community Driven</h3>
+            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+              Share knowledge, engage in interactive learning modules, and connect with a community of eco-champions.
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+
       {/* 4. BOTTOM IMPACT BANNER (EXACT MATCH TO CROPPED UI SCREENSHOT) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="impact" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="bg-[#f7faf8] border border-gray-100 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-xs">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             
