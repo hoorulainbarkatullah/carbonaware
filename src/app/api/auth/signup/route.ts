@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       streak: 0,
       xp: 0,
       level: 1,
+      loginCount: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
         role: newUser.role,
         location: newUser.location,
         carbonGoal: newUser.carbonGoal,
+        loginCount: 1,
+        isFirstLogin: true,
       },
     });
   } catch (error: any) {

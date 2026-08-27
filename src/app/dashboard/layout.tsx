@@ -39,7 +39,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<{ id?: string; name: string; email: string; location: string; role?: string } | null>(null);
+  const [user, setUser] = useState<{ id?: string; name: string; email: string; location: string; role?: string; isFirstLogin?: boolean; loginCount?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -246,12 +246,18 @@ export default function DashboardLayout({
           subtitle: "Manage platform users, learning content, challenges, and system metrics.",
           isWelcome: false
         };
-      default:
+      default: {
+        const isFirstTime = user.isFirstLogin === true || user.loginCount === 1;
+        const welcomeTitle = isFirstTime
+          ? `Welcome, ${user.name}! 🌿`
+          : `Welcome back, ${user.name}! 🌿`;
+
         return {
-          title: `Welcome back, ${user.name}! 🌿`,
+          title: welcomeTitle,
           subtitle: "Track your carbon footprint and make every action count.",
           isWelcome: true
         };
+      }
     }
   };
 

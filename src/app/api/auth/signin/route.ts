@@ -43,6 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Increment loginCount in MongoDB
+    const currentLoginCount = user.loginCount || 1;
+    const newLoginCount = currentLoginCount + 1;
+    await usersCollection.updateOne(
+      { _id: user._id },
+      { $set: { loginCount: newLoginCount, updatedAt: new Date() } }
+    );
+
     return NextResponse.json({
       success: true,
       user: {
@@ -52,6 +60,8 @@ export async function POST(request: Request) {
         role: user.role || (user.email.includes("admin") ? "admin" : "user"),
         location: user.location || "Peshawar, KP",
         carbonGoal: user.carbonGoal || 2.5,
+        loginCount: newLoginCount,
+        isFirstLogin: false,
       },
     });
   } catch (error: any) {
