@@ -37,9 +37,13 @@ export async function GET(request: Request) {
     const latest = totalCalculations > 0 ? calculations[totalCalculations - 1] : null;
     const previous = totalCalculations > 1 ? calculations[totalCalculations - 2] : null;
 
-    const totalEmission = latest?.totalEmission ?? ((latest?.transportEmission ?? 0) + (latest?.foodEmission ?? 0));
-    const transportEmission = latest?.transportEmission ?? 0;
-    const foodEmission = latest?.foodEmission ?? 0;
+    // Support independent individual calculations (latest transport calculation & latest food calculation)
+    const latestTransportCalc = calculations.slice().reverse().find(c => c.transportEmission !== null && c.transportEmission !== undefined);
+    const latestFoodCalc = calculations.slice().reverse().find(c => c.foodEmission !== null && c.foodEmission !== undefined);
+
+    const transportEmission = latestTransportCalc?.transportEmission ?? 0;
+    const foodEmission = latestFoodCalc?.foodEmission ?? 0;
+    const totalEmission = parseFloat((transportEmission + foodEmission).toFixed(2));
 
     const validTotals = calculations.map((c) => c.totalEmission ?? ((c.transportEmission ?? 0) + (c.foodEmission ?? 0)));
     const sumTotal = validTotals.reduce((acc, curr) => acc + curr, 0);

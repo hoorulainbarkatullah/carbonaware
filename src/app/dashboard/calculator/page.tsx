@@ -26,9 +26,11 @@ export default function CalculatorPage() {
   // Active tab state (for mobile responsive view toggling)
   const [activeTab, setActiveTab] = useState<"transport" | "food">("transport");
 
-  // Calculation Document ID tracking & state flags
+  // Calculation Document ID tracking & independent calculation flags
   const [calculationId, setCalculationId] = useState<string | null>(null);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
+  const [isTransportCalculated, setIsTransportCalculated] = useState<boolean>(false);
+  const [isFoodCalculated, setIsFoodCalculated] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -71,9 +73,9 @@ export default function CalculatorPage() {
     return undefined;
   };
 
-  // Calculate live results client-side when inputs change
+  // Calculate live results client-side when inputs change for active tab
   useEffect(() => {
-    // 1. Transport Calculation
+    // 1. Transport Calculation (Isolated to Transport input)
     let calcTransport = 0;
     if (distanceKm > 0 && tripsPerWeek > 0) {
       let emissionPerKm = 0.192;
@@ -98,7 +100,7 @@ export default function CalculatorPage() {
     }
     setTransportFootprint(parseFloat(calcTransport.toFixed(2)));
 
-    // 2. Food Calculation
+    // 2. Food Calculation (Isolated to Food input)
     let calcFood = 0;
     if (mealsPerDay > 0) {
       let dietBase = 0.20;
@@ -132,7 +134,7 @@ export default function CalculatorPage() {
     wasteMgmt
   ]);
 
-  // Sync total emissions and percentages
+  // Sync total emissions and percentages based on calculated categories
   useEffect(() => {
     const total = parseFloat((transportFootprint + foodFootprint).toFixed(2));
     setTotalFootprint(total);
@@ -173,6 +175,8 @@ export default function CalculatorPage() {
     clearAlerts();
     setCalculationId(null);
     setHasCalculated(false);
+    setIsTransportCalculated(false);
+    setIsFoodCalculated(false);
     setIsCompleted(false);
 
     setFromLocation("");
@@ -197,12 +201,12 @@ export default function CalculatorPage() {
     setSuccessMessage("Calculator reset! All fields cleared for new input.");
   };
 
-  // Handle Calculate Transport action
+  // Handle Calculate Transport action independently
   const handleCalculateTransport = async () => {
     clearAlerts();
 
-    if (distanceKm < 0 || tripsPerWeek < 0) {
-      setErrorMessage("Distance and trips per week cannot be negative numbers.");
+    if (distanceKm <= 0 || tripsPerWeek <= 0) {
+      setErrorMessage("Please enter valid distance (KM) and trips per week.");
       return;
     }
 
@@ -239,10 +243,11 @@ export default function CalculatorPage() {
           setTransportFootprint(data.calculation.transportEmission);
         }
         setHasCalculated(true);
+        setIsTransportCalculated(true);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("userUpdated"));
         }
-        setSuccessMessage("Transport footprint calculated and saved to Dashboard!");
+        setSuccessMessage("Transport footprint calculated & recorded independently!");
       }
     } catch (err) {
       console.error("Failed to calculate transport emission:", err);
@@ -291,10 +296,11 @@ export default function CalculatorPage() {
           setFoodFootprint(data.calculation.foodEmission);
         }
         setHasCalculated(true);
+        setIsFoodCalculated(true);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("userUpdated"));
         }
-        setSuccessMessage("Food footprint calculated and saved to Dashboard!");
+        setSuccessMessage("Food footprint calculated & recorded independently!");
       }
     } catch (err) {
       console.error("Failed to calculate food emission:", err);
@@ -806,10 +812,18 @@ export default function CalculatorPage() {
                 <span className="text-3xl sm:text-4xl font-black text-gray-900 leading-none mt-1">{totalFootprint.toFixed(2)}</span>
                 <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1.5">tons CO₂ / month</span>
 
-                {/* Improvement pill */}
+                {/* Independent calculation status pill */}
                 <div className="mt-3 flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[9px] font-black border border-emerald-100/80 shadow-2xs">
                   <TrendingDown className="w-3 h-3 text-emerald-700" />
-                  <span>Calculated Live</span>
+                  <span>
+                    {isTransportCalculated && isFoodCalculated
+                      ? "Both Categories Calculated 🌿"
+                      : isTransportCalculated
+                      ? "Transport Calculated Individually 🚗"
+                      : isFoodCalculated
+                      ? "Food Calculated Individually 🍲"
+                      : "Live Estimated Preview"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -820,8 +834,13 @@ export default function CalculatorPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-700">
                   <div className="flex items-center gap-2">
-                    <Car className="w-4 h-4 text-gray-400" />
+                    <Car className="w-4 h-4 text-emerald-600" />
                     <span>Transport Emission</span>
+                    {isTransportCalculated && (
+                      <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        Recorded
+                      </span>
+                    )}
                   </div>
                   <span>{transportFootprint.toFixed(2)} tons CO₂</span>
                 </div>
@@ -842,8 +861,13 @@ export default function CalculatorPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-700">
                   <div className="flex items-center gap-2">
-                    <UtensilsCrossed className="w-4 h-4 text-gray-400" />
+                    <UtensilsCrossed className="w-4 h-4 text-amber-600" />
                     <span>Food Emission</span>
+                    {isFoodCalculated && (
+                      <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        Recorded
+                      </span>
+                    )}
                   </div>
                   <span>{foodFootprint.toFixed(2)} tons CO₂</span>
                 </div>
