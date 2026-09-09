@@ -15,7 +15,9 @@ import {
   ArrowRight,
   RefreshCw,
   Leaf,
-  Bot
+  Bot,
+  X,
+  Calculator
 } from "lucide-react";
 
 export default function RecommendationsPage() {
@@ -29,6 +31,7 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [generating, setGenerating] = useState<boolean>(false);
   const [completedRecs, setCompletedRecs] = useState<string[]>([]);
+  const [dismissedRecs, setDismissedRecs] = useState<string[]>([]);
 
   const fetchAIRecommendations = async () => {
     try {
@@ -75,6 +78,7 @@ export default function RecommendationsPage() {
 
   const handleRegenerateAI = () => {
     setGenerating(true);
+    setDismissedRecs([]);
     fetchAIRecommendations();
   };
 
@@ -83,6 +87,14 @@ export default function RecommendationsPage() {
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
+
+  const dismissRec = (id: string) => {
+    setDismissedRecs((prev) => [...prev, id]);
+  };
+
+  const activeRecommendations = recommendations.filter(
+    (rec) => !dismissedRecs.includes(rec.id)
+  );
 
   const getIcon = (category: string, iconType?: string) => {
     if (category === "Transport" || iconType === "car") {
@@ -115,13 +127,13 @@ export default function RecommendationsPage() {
               <span>{aiModel}</span>
             </span>
             <span className="bg-white/10 text-emerald-100 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-              Real-time Analysis
+              Calculation-Based AI
             </span>
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">AI Personalized Carbon Reduction Plan</h2>
           <p className="text-xs text-emerald-100/90 leading-relaxed font-medium">
-            {summary || `AI analyzed your ${totalEmission.toFixed(2)} tons CO₂ footprint and calculated tailored reduction steps.`}
+            {summary || `AI analyzed your calculated carbon footprint and generated customized reduction steps.`}
           </p>
         </div>
 
@@ -162,29 +174,59 @@ export default function RecommendationsPage() {
         </div>
       )}
 
-      {/* Recommendations Cards Grid */}
-      {!loading && (
+      {/* Empty State when no calculation or all dismissed */}
+      {!loading && activeRecommendations.length === 0 && (
+        <div className="bg-white rounded-3xl border border-gray-150 p-10 text-center shadow-xs flex flex-col items-center max-w-lg mx-auto space-y-4 my-8">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-xs">
+            <Calculator className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h3 className="text-lg font-black text-gray-900 leading-snug">No Carbon Footprint Calculated Yet</h3>
+          <p className="text-xs text-gray-500 font-medium leading-relaxed">
+            AI recommendations are generated dynamically based on your personal transport and food activity calculations. Please calculate your footprint in the Calculator to view tailored reduction steps.
+          </p>
+          <Link
+            href="/dashboard/calculator"
+            className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-3 rounded-xl text-xs shadow-md transition cursor-pointer"
+          >
+            <span>Go to Calculator</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+
+      {/* Active Recommendations Cards Grid */}
+      {!loading && activeRecommendations.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {recommendations.map((rec) => {
+          {activeRecommendations.map((rec) => {
             const isDone = completedRecs.includes(rec.id);
 
             return (
               <div
                 key={rec.id}
-                className={`bg-white rounded-3xl border p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between transition-all ${
+                className={`bg-white rounded-3xl border p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col justify-between transition-all relative ${
                   isDone ? "border-emerald-400 bg-emerald-50/20" : "border-gray-150 hover:border-emerald-200"
                 }`}
               >
                 <div className="space-y-4">
-                  {/* Top Row: Category Icon & Difficulty Pill */}
+                  {/* Top Row: Category Icon, Difficulty & Close/Dismiss Button */}
                   <div className="flex items-center justify-between">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shadow-xs ${getCategoryBg(rec.category)}`}>
                       {getIcon(rec.category, rec.iconType)}
                     </div>
 
-                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200/60">
-                      {rec.difficulty || "Easy"}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200/60">
+                        {rec.difficulty || "Easy"}
+                      </span>
+
+                      <button
+                        onClick={() => dismissRec(rec.id)}
+                        title="Dismiss / Remove recommendation card"
+                        className="p-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Title & Category */}
@@ -243,9 +285,9 @@ export default function RecommendationsPage() {
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xs font-black text-gray-900 leading-tight">AI Continuous Monitoring</h4>
+            <h4 className="text-xs font-black text-gray-900 leading-tight">Calculation-Based AI Recommendations</h4>
             <p className="text-[10px] text-gray-500 font-medium leading-relaxed mt-0.5">
-              Every time you calculate new emissions in the Calculator, CarbonAware AI automatically re-evaluates your reduction plan.
+              Recommendations are calculated dynamically based on your personal transport and food activity records.
             </p>
           </div>
         </div>

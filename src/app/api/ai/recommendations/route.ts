@@ -150,8 +150,22 @@ export async function POST(request: Request) {
     const latestTransportCalc = calculations.slice().reverse().find(c => c.transportEmission !== null && c.transportEmission !== undefined);
     const latestFoodCalc = calculations.slice().reverse().find(c => c.foodEmission !== null && c.foodEmission !== undefined);
 
-    const transportEmission = latestTransportCalc?.transportEmission ?? 1.2;
-    const foodEmission = latestFoodCalc?.foodEmission ?? 0.4;
+    // If user has not performed any calculations yet, return empty list without static fake defaults
+    if (!latestTransportCalc && !latestFoodCalc) {
+      return NextResponse.json({
+        success: true,
+        hasData: false,
+        aiModel: "CarbonAware AI",
+        totalEmission: 0,
+        transportEmission: 0,
+        foodEmission: 0,
+        recommendations: [],
+        summary: "No carbon footprint calculated yet. Please calculate your Transport or Food emissions in the Calculator to generate personalized AI recommendations.",
+      });
+    }
+
+    const transportEmission = latestTransportCalc?.transportEmission ?? 0;
+    const foodEmission = latestFoodCalc?.foodEmission ?? 0;
     const totalEmission = parseFloat((transportEmission + foodEmission).toFixed(2));
 
     const transportData: any = latestTransportCalc?.transportData || {};
