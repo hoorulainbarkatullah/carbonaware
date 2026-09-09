@@ -17,7 +17,8 @@ import {
   Leaf,
   Bot,
   X,
-  Calculator
+  Calculator,
+  Loader2
 } from "lucide-react";
 
 export default function RecommendationsPage() {
@@ -31,26 +32,35 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [generating, setGenerating] = useState<boolean>(false);
   const [completedRecs, setCompletedRecs] = useState<string[]>([]);
-  const [dismissedRecs, setDismissedRecs] = useState<string[]>([]);
+  const [replacingIds, setReplacingIds] = useState<string[]>([]);
+  const [dismissedTitles, setDismissedTitles] = useState<string[]>([]);
 
-  const fetchAIRecommendations = async () => {
+  const getUserId = () => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          return u.id || u.email;
+        } catch (e) {}
+      }
+    }
+    return undefined;
+  };
+
+  const fetchAIRecommendations = async (customExclude: string[] = []) => {
     try {
       setLoading(true);
-      let uid: string | undefined = undefined;
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("user");
-        if (stored) {
-          try {
-            const u = JSON.parse(stored);
-            uid = u.id || u.email;
-          } catch (e) {}
-        }
-      }
+      const uid = getUserId();
 
       const res = await fetch("/api/ai/recommendations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: uid }),
+        body: JSON.stringify({
+          action: "generate",
+          userId: uid,
+          excludeTitles: customExclude.length > 0 ? customExclude : dismissedTitles,
+        }),
       });
 
       if (res.ok) {
@@ -78,8 +88,9 @@ export default function RecommendationsPage() {
 
   const handleRegenerateAI = () => {
     setGenerating(true);
-    setDismissedRecs([]);
-    fetchAIRecommendations();
+    const currentTitles = recommendations.map((r) => r.title);
+    const combinedExcludes = [...dismissedTitles, ...currentTitles];
+    fetchAIRecommendations(combinedExcludes);
   };
 
   const toggleComplete = (id: string) => {
@@ -88,13 +99,53 @@ export default function RecommendationsPage() {
     );
   };
 
-  const dismissRec = (id: string) => {
-    setDismissedRecs((prev) => [...prev, id]);
-  };
+  // Replace closed/removed recommendation with a brand new AI recommendation
+  const handleRemoveAndReplace = async (recToReplace: any) => {
+    const targetId = recToReplace.id;
+    if (replacingIds.includes(targetId)) return;
 
-  const activeRecommendations = recommendations.filter(
-    (rec) => !dismissedRecs.includes(rec.id)
-  );
+    // 1. Mark this specific card as replacing (shows animated loader inside card)
+    setReplacingIds((prev) => [...prev, targetId]);
+    const updatedDismissed = [...dismissedTitles, recToReplace.title];
+    setDismissedTitles(updatedDismissed);
+
+    try {
+      const uid = getUserId();
+      const existingTitles = [
+        ...updatedDismissed,
+        ...recommendations.map((r) => r.title),
+      ];
+
+      const res = await fetch("/api/ai/recommendations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "replaceOne",
+          userId: uid,
+          dismissedTitle: recToReplace.title,
+          category: recToReplace.category || "Transport",
+          existingTitles,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.newRecommendation) {
+          if (data.aiModel) setAiModel(data.aiModel);
+          // Replace the old recommendation in place with the fresh one
+          setRecommendations((prev) =>
+            prev.map((item) =>
+              item.id === targetId ? { ...data.newRecommendation, isFresh: true } : item
+            )
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to replace recommendation:", err);
+    } finally {
+      setReplacingIds((prev) => prev.filter((id) => id !== targetId));
+    }
+  };
 
   const getIcon = (category: string, iconType?: string) => {
     if (category === "Transport" || iconType === "car") {
@@ -127,7 +178,7 @@ export default function RecommendationsPage() {
               <span>{aiModel}</span>
             </span>
             <span className="bg-white/10 text-emerald-100 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-              Calculation-Based AI
+              Dynamic Personalized AI
             </span>
           </div>
 
@@ -160,7 +211,7 @@ export default function RecommendationsPage() {
         <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
-      {/* Loading Skeleton */}
+      {/* Loading Skeleton for initial fetch */}
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {[1, 2, 3].map((n) => (
@@ -174,8 +225,8 @@ export default function RecommendationsPage() {
         </div>
       )}
 
-      {/* Empty State when no calculation or all dismissed */}
-      {!loading && activeRecommendations.length === 0 && (
+      {/* Empty State when no calculation exists */}
+      {!loading && recommendations.length === 0 && (
         <div className="bg-white rounded-3xl border border-gray-150 p-10 text-center shadow-xs flex flex-col items-center max-w-lg mx-auto space-y-4 my-8">
           <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-xs">
             <Calculator className="w-8 h-8 text-emerald-600" />
@@ -195,10 +246,33 @@ export default function RecommendationsPage() {
       )}
 
       {/* Active Recommendations Cards Grid */}
-      {!loading && activeRecommendations.length > 0 && (
+      {!loading && recommendations.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {activeRecommendations.map((rec) => {
+          {recommendations.map((rec) => {
             const isDone = completedRecs.includes(rec.id);
+            const isReplacing = replacingIds.includes(rec.id);
+
+            // If this card is currently being replaced by AI, render a stylish generating skeleton
+            if (isReplacing) {
+              return (
+                <div
+                  key={rec.id}
+                  className="bg-emerald-50/40 rounded-3xl border-2 border-dashed border-emerald-300/80 p-6 min-h-[320px] flex flex-col items-center justify-center text-center space-y-3 shadow-inner animate-pulse"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-sm border border-emerald-200">
+                    <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                      Generating New Recommendation...
+                    </h4>
+                    <p className="text-[11px] text-emerald-700/80 font-medium max-w-[200px] mt-1">
+                      AI is finding a fresh personalized carbon reduction step for your profile.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
@@ -208,20 +282,26 @@ export default function RecommendationsPage() {
                 }`}
               >
                 <div className="space-y-4">
-                  {/* Top Row: Category Icon, Difficulty & Close/Dismiss Button */}
+                  {/* Top Row: Category Icon, Difficulty, New Badge & Close/Remove Button */}
                   <div className="flex items-center justify-between">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shadow-xs ${getCategoryBg(rec.category)}`}>
                       {getIcon(rec.category, rec.iconType)}
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {rec.isFresh && (
+                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Fresh AI
+                        </span>
+                      )}
+
                       <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200/60">
                         {rec.difficulty || "Easy"}
                       </span>
 
                       <button
-                        onClick={() => dismissRec(rec.id)}
-                        title="Dismiss / Remove recommendation card"
+                        onClick={() => handleRemoveAndReplace(rec)}
+                        title="Remove and get a new AI recommendation"
                         className="p-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
                       >
                         <X className="w-4 h-4" />
@@ -285,9 +365,9 @@ export default function RecommendationsPage() {
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xs font-black text-gray-900 leading-tight">Calculation-Based AI Recommendations</h4>
+            <h4 className="text-xs font-black text-gray-900 leading-tight">Dynamic Climate AI Engine</h4>
             <p className="text-[10px] text-gray-500 font-medium leading-relaxed mt-0.5">
-              Recommendations are calculated dynamically based on your personal transport and food activity records.
+              Powered by Groq Llama 3.3 70B AI. Dismissing any recommendation automatically generates a fresh, alternative reduction step tailored to your carbon emission habits.
             </p>
           </div>
         </div>
