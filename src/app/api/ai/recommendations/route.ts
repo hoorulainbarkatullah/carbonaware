@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isValidObjectId } from "@/lib/db-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,8 @@ const TRANSPORT_RECOMMENDATIONS = [
   },
   {
     title: "Maintain Optimal Tire Pressure & Eco-Driving",
-    impact: () => "Save ~0.14 tons CO₂/mo",
-    co2Savings: () => "-0.14 tons",
+    impact: (e: number) => `Save ~${(e * 0.1).toFixed(2)} tons CO₂/mo`,
+    co2Savings: (e: number) => `-${(e * 0.1).toFixed(2)} tons`,
     difficulty: "Easy",
     iconType: "car",
     desc: () => "Maintaining recommended tire PSI and avoiding sudden acceleration or excessive idling boosts vehicle fuel economy by 8-12%.",
@@ -43,8 +44,8 @@ const TRANSPORT_RECOMMENDATIONS = [
   },
   {
     title: "Adopt E-Bike or Cycling for Short Trips Under 5 km",
-    impact: () => "Save ~0.18 tons CO₂/mo",
-    co2Savings: () => "-0.18 tons",
+    impact: (e: number) => `Save ~${(e * 0.25).toFixed(2)} tons CO₂/mo`,
+    co2Savings: (e: number) => `-${(e * 0.25).toFixed(2)} tons`,
     difficulty: "Easy",
     iconType: "car",
     desc: () => "Over 40% of urban car trips are under 5 kilometers. Swapping short trips to an e-bike or traditional bicycle produces zero direct tailpipe emissions.",
@@ -82,8 +83,8 @@ const FOOD_RECOMMENDATIONS = [
   },
   {
     title: "Zero Food-Waste Meal Prep & Smart Storage",
-    impact: () => "Save ~0.20 tons CO₂/mo",
-    co2Savings: () => "-0.20 tons",
+    impact: (e: number) => `Save ~${(e * 0.15).toFixed(2)} tons CO₂/mo`,
+    co2Savings: (e: number) => `-${(e * 0.15).toFixed(2)} tons`,
     difficulty: "Easy",
     iconType: "food",
     desc: () => "Plan your meals, store produce properly in crisper drawers, and freeze leftovers to prevent edible food from rotting in landfills.",
@@ -100,8 +101,8 @@ const FOOD_RECOMMENDATIONS = [
   },
   {
     title: "Eliminate Over-Packaged & Ultra-Processed Foods",
-    impact: () => "Save ~0.15 tons CO₂/mo",
-    co2Savings: () => "-0.15 tons",
+    impact: (e: number) => `Save ~${(e * 0.1).toFixed(2)} tons CO₂/mo`,
+    co2Savings: (e: number) => `-${(e * 0.1).toFixed(2)} tons`,
     difficulty: "Easy",
     iconType: "food",
     desc: () => "Choose whole, minimally packaged staple ingredients. Ultra-processed foods carry massive industrial processing and plastic packaging overhead.",
@@ -109,75 +110,80 @@ const FOOD_RECOMMENDATIONS = [
   },
 ];
 
-const WASTE_ENERGY_RECOMMENDATIONS = [
-  {
-    title: "Compost Organic Kitchen Scraps",
-    impact: () => "Save ~0.16 tons CO₂/mo",
-    co2Savings: () => "-0.16 tons",
-    difficulty: "Easy",
-    iconType: "waste",
-    desc: () => "Divert fruit peels, vegetable scraps, and coffee grounds into home or community compost instead of methane-producing landfills.",
-    aiTip: "Aerobic composting prevents anaerobic decomposition which releases potent methane gas into the atmosphere.",
-  },
-  {
-    title: "Smart Thermostat & 1°C Temperature Adjustment",
-    impact: () => "Save ~0.19 tons CO₂/mo",
-    co2Savings: () => "-0.19 tons",
-    difficulty: "Easy",
-    iconType: "energy",
-    desc: () => "Adjust your heating down by 1°C in winter and air conditioning up by 1°C in summer to instantly lower energy consumption.",
-    aiTip: "Each degree Celsius adjustment reduces your HVAC utility bill and related grid emissions by 5-8%.",
-  },
-  {
-    title: "Switch to High-Efficiency LED Bulbs & Strip Sockets",
-    impact: () => "Save ~0.14 tons CO₂/mo",
-    co2Savings: () => "-0.14 tons",
-    difficulty: "Easy",
-    iconType: "energy",
-    desc: () => "Replace legacy incandescent or CFL bulbs with LEDs and plug entertainment devices into smart power strips to eliminate phantom standby draw.",
-    aiTip: "LEDs use 75-80% less electricity and last 25 times longer than traditional incandescent bulbs.",
-  },
-  {
-    title: "Cold Water Laundry & Natural Air-Drying",
-    impact: () => "Save ~0.15 tons CO₂/mo",
-    co2Savings: () => "-0.15 tons",
-    difficulty: "Easy",
-    iconType: "energy",
-    desc: () => "About 75-90% of washing machine energy goes into heating water. Washing in cold water and rack-drying clothes preserves fabric and saves carbon.",
-    aiTip: "Switching from hot to cold cycles plus air-drying can save up to 0.3 tons of CO₂ per household annually.",
-  },
-  {
-    title: "Eliminate Single-Use Plastics & Repurpose Containers",
-    impact: () => "Save ~0.12 tons CO₂/mo",
-    co2Savings: () => "-0.12 tons",
-    difficulty: "Easy",
-    iconType: "waste",
-    desc: () => "Bring reusable totes, silicone bags, and glass containers. Plastic production and incineration are major drivers of petrochemical carbon emissions.",
-    aiTip: "Reusing durable containers 50+ times offsets their production emissions completely.",
-  },
-];
 
-// Helper to get an alternative recommendation from adaptive pool
+type RecCategory = "Transport" | "Food";
+
+// Shapes of the calculator inputs saved on a CarbonCalculation (see src/lib/calculator.ts)
+type TransportData = {
+  transportType?: string;
+  fuelType?: string;
+  distanceKm?: number;
+  tripsPerWeek?: number;
+  fromLocation?: string;
+  toLocation?: string;
+};
+type FoodData = {
+  dietType?: string;
+  mealsPerDay?: number;
+  localFoodPct?: number;
+  foodWasteLevel?: string;
+  wasteMgmt?: string;
+};
+type Recommendation = { id?: string; title?: string; category?: string; [key: string]: unknown };
+type Calc = { id: string; transportEmission: number | null; foodEmission: number | null; transportData: unknown; foodData: unknown };
+const ALL_CATEGORIES: RecCategory[] = ["Transport", "Food"];
+const TOTAL_RECOMMENDATIONS = 3;
+
+// Map any category label (from the client or the AI) onto the calculator's categories
+function normalizeCategory(value: unknown): RecCategory | null {
+  const v = String(value || "").toLowerCase();
+  if (v.includes("transport") || v.includes("travel") || v.includes("commute")) return "Transport";
+  if (v.includes("food") || v.includes("diet")) return "Food";
+  return null;
+}
+
+// Describe only the values that were actually calculated – no invented defaults
+function transportContext(t: TransportData, emission: number) {
+  const parts = [`${emission.toFixed(2)} tons CO2/month`];
+  if (t.transportType) parts.push(`mode: ${t.transportType}`);
+  if (t.fuelType && (t.transportType === "car" || t.transportType === "motorbike")) parts.push(`fuel: ${t.fuelType}`);
+  if (typeof t.distanceKm === "number") parts.push(`one-way road distance: ${t.distanceKm} km`);
+  if (typeof t.tripsPerWeek === "number") parts.push(`${t.tripsPerWeek} trips/week`);
+  if (t.fromLocation && t.toLocation) parts.push(`route: ${t.fromLocation} → ${t.toLocation}`);
+  return parts.join(", ");
+}
+
+function foodContext(f: FoodData, emission: number) {
+  const parts = [`${emission.toFixed(2)} tons CO2/month`];
+  if (f.dietType) parts.push(`diet: ${f.dietType}`);
+  if (typeof f.mealsPerDay === "number") parts.push(`${f.mealsPerDay} meals/day`);
+  if (typeof f.localFoodPct === "number") parts.push(`${f.localFoodPct}% locally sourced`);
+  if (f.foodWasteLevel) parts.push(`food waste: ${f.foodWasteLevel}`);
+  if (f.wasteMgmt) parts.push(`waste management: ${f.wasteMgmt}`);
+  return parts.join(", ");
+}
+
+function adaptiveContextSentence(category: RecCategory, t: TransportData, f: FoodData) {
+  if (category === "Transport" && typeof t.distanceKm === "number" && typeof t.tripsPerWeek === "number") {
+    return ` Based on your ${t.distanceKm} km trip × ${t.tripsPerWeek} trips/week${t.transportType ? ` by ${t.transportType}` : ""}.`;
+  }
+  if (category === "Food" && f.dietType) {
+    return ` Based on your ${f.dietType} diet${typeof f.mealsPerDay === "number" ? ` with ${f.mealsPerDay} meals/day` : ""}.`;
+  }
+  return "";
+}
+
+// Helper to get an alternative recommendation from the adaptive pool of one category
 function getAdaptiveAlternative(
-  category: string,
+  category: RecCategory,
   transportE: number,
   foodE: number,
-  tData: any,
+  tData: TransportData,
+  fData: FoodData,
   excludeTitles: string[] = []
 ) {
-  let pool = TRANSPORT_RECOMMENDATIONS;
-  let categoryName = "Transport";
-  let emissionRef = transportE;
-
-  if (category.toLowerCase().includes("food")) {
-    pool = FOOD_RECOMMENDATIONS;
-    categoryName = "Food & Diet";
-    emissionRef = foodE;
-  } else if (category.toLowerCase().includes("waste") || category.toLowerCase().includes("energy")) {
-    pool = WASTE_ENERGY_RECOMMENDATIONS;
-    categoryName = "Energy & Lifestyle";
-    emissionRef = (transportE + foodE) * 0.2;
-  }
+  const pool = category === "Food" ? FOOD_RECOMMENDATIONS : TRANSPORT_RECOMMENDATIONS;
+  const emissionRef = category === "Food" ? foodE : transportE;
 
   // Find items not in excludeTitles
   const available = pool.filter(
@@ -189,31 +195,56 @@ function getAdaptiveAlternative(
     : pool[Math.floor(Math.random() * pool.length)];
 
   return {
-    id: `rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    category: categoryName,
+    id: `rec-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    category,
     title: selected.title,
     impact: selected.impact(emissionRef),
     difficulty: selected.difficulty,
     co2Savings: selected.co2Savings(emissionRef),
     iconType: selected.iconType,
-    desc: selected.desc(emissionRef, tData),
+    desc: selected.desc(emissionRef, tData) + adaptiveContextSentence(category, tData, fData),
     aiTip: selected.aiTip,
   };
 }
 
-// Helper to generate full 3 adaptive recommendations
-function generateAdaptiveAIRecommendations(
+// How many of the 3 cards each selected category gets (the larger emitter gets more)
+function allocateCounts(categories: RecCategory[], transportE: number, foodE: number) {
+  const counts: Record<RecCategory, number> = { Transport: 0, Food: 0 };
+  if (categories.length === 1) {
+    counts[categories[0]] = TOTAL_RECOMMENDATIONS;
+  } else if (categories.length === 2) {
+    const major: RecCategory = foodE > transportE ? "Food" : "Transport";
+    counts[major] = TOTAL_RECOMMENDATIONS - 1;
+    counts[major === "Food" ? "Transport" : "Food"] = 1;
+  }
+  return counts;
+}
+
+// Keep only recommendations in the selected categories (respecting counts) and fill any gaps from the adaptive pool
+function enforceCategories(
+  recs: Recommendation[],
+  counts: Record<RecCategory, number>,
   transportE: number,
   foodE: number,
-  totalE: number,
-  tData: any,
-  fData: any,
-  excludeTitles: string[] = []
+  tData: TransportData,
+  fData: FoodData,
+  excludeTitles: string[]
 ) {
-  const r1 = getAdaptiveAlternative("Transport", transportE, foodE, tData, excludeTitles);
-  const r2 = getAdaptiveAlternative("Food", transportE, foodE, tData, [...excludeTitles, r1.title]);
-  const r3 = getAdaptiveAlternative("Waste", transportE, foodE, tData, [...excludeTitles, r1.title, r2.title]);
-  return [r1, r2, r3];
+  const result: Recommendation[] = [];
+  for (const category of ALL_CATEGORIES) {
+    const matching = (Array.isArray(recs) ? recs : [])
+      .filter((r) => r && typeof r.title === "string" && normalizeCategory(r.category) === category)
+      .slice(0, counts[category])
+      .map((r, i) => ({ ...r, category, id: `${r.id || "rec"}-${category}-${i}-${Date.now()}` }));
+    result.push(...matching);
+    const used = [...excludeTitles, ...result.map((r) => r.title || "")];
+    for (let i = matching.length; i < counts[category]; i++) {
+      const alt = getAdaptiveAlternative(category, transportE, foodE, tData, fData, used);
+      used.push(alt.title);
+      result.push(alt);
+    }
+  }
+  return result;
 }
 
 export async function POST(request: Request) {
@@ -226,21 +257,42 @@ export async function POST(request: Request) {
       category = "Transport",
       existingTitles = [],
       excludeTitles = [],
+      calculationId,
+      categories: requestedCategories,
     } = body;
 
     const userId = reqUserId || "demo-user";
 
-    // 1. Fetch User's latest carbon calculations from database
+    // 1. Use the calculation the user just made (calculationId); fall back to their latest calculations
     const calculations = await prisma.carbonCalculation.findMany({
       where: { userId },
       orderBy: { createdAt: "asc" },
     });
 
-    const latestTransportCalc = calculations.slice().reverse().find((c) => c.transportEmission !== null && c.transportEmission !== undefined);
-    const latestFoodCalc = calculations.slice().reverse().find((c) => c.foodEmission !== null && c.foodEmission !== undefined);
+    const targetCalc =
+      calculationId && isValidObjectId(calculationId)
+        ? calculations.find((c) => c.id === calculationId) || null
+        : null;
+
+    const hasTransport = (c: Calc | null | undefined): c is Calc => !!c && c.transportEmission !== null && c.transportEmission !== undefined;
+    const hasFood = (c: Calc | null | undefined): c is Calc => !!c && c.foodEmission !== null && c.foodEmission !== undefined;
+
+    const latestTransportCalc = hasTransport(targetCalc) ? targetCalc : calculations.slice().reverse().find(hasTransport);
+    const latestFoodCalc = hasFood(targetCalc) ? targetCalc : calculations.slice().reverse().find(hasFood);
+
+    // 2. Selected categories: what the client asked for, limited to categories that have calculated data
+    const availableCategories = ALL_CATEGORIES.filter((c) => (c === "Transport" ? !!latestTransportCalc : !!latestFoodCalc));
+    const requested: RecCategory[] = Array.isArray(requestedCategories)
+      ? Array.from(new Set(requestedCategories.map(normalizeCategory).filter((c): c is RecCategory => !!c)))
+      : [];
+    // An explicit selection is never widened: unknown categories (e.g. Energy, which has no calculator data) yield nothing
+    const categoriesWereRequested = Array.isArray(requestedCategories) && requestedCategories.length > 0;
+    const selectedCategories = (categoriesWereRequested ? requested : availableCategories).filter((c) =>
+      availableCategories.includes(c)
+    );
 
     // If user has not performed any calculations yet, return empty list without static fake defaults
-    if (!latestTransportCalc && !latestFoodCalc) {
+    if (selectedCategories.length === 0) {
       return NextResponse.json({
         success: true,
         hasData: false,
@@ -248,17 +300,28 @@ export async function POST(request: Request) {
         totalEmission: 0,
         transportEmission: 0,
         foodEmission: 0,
+        categories: [],
         recommendations: [],
         summary: "No carbon footprint calculated yet. Please calculate your Transport or Food emissions in the Calculator to generate personalized AI recommendations.",
       });
     }
 
-    const transportEmission = latestTransportCalc?.transportEmission ?? 0;
-    const foodEmission = latestFoodCalc?.foodEmission ?? 0;
+    const includeTransport = selectedCategories.includes("Transport");
+    const includeFood = selectedCategories.includes("Food");
+
+    const transportEmission = includeTransport ? latestTransportCalc?.transportEmission ?? 0 : 0;
+    const foodEmission = includeFood ? latestFoodCalc?.foodEmission ?? 0 : 0;
     const totalEmission = parseFloat((transportEmission + foodEmission).toFixed(2));
 
-    const transportData: any = latestTransportCalc?.transportData || {};
-    const foodData: any = latestFoodCalc?.foodData || {};
+    const transportData = ((includeTransport && latestTransportCalc?.transportData) || {}) as TransportData;
+    const foodData = ((includeFood && latestFoodCalc?.foodData) || {}) as FoodData;
+
+    const profileLines = [
+      includeTransport ? `- Transport: ${transportContext(transportData, transportEmission)}` : null,
+      includeFood ? `- Food: ${foodContext(foodData, foodEmission)}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const groqKey = process.env.GROQ_API_KEY || (process.env.GEMINI_API_KEY?.startsWith("gsk_") ? process.env.GEMINI_API_KEY : undefined);
     const geminiKey = process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith("gsk_") ? process.env.GEMINI_API_KEY : undefined;
@@ -270,32 +333,36 @@ export async function POST(request: Request) {
     // CASE A: REPLACE ONE RECOMMENDATION (when user closes/deletes one card)
     // =========================================================================
     if (action === "replaceOne") {
-      let newRec = null;
+      let newRec: Recommendation | null = null;
       let aiModelUsed = "CarbonAware Adaptive AI";
+
+      // The replacement must stay inside the selected categories
+      const normalized = normalizeCategory(category);
+      const replaceCategory: RecCategory =
+        normalized && selectedCategories.includes(normalized) ? normalized : selectedCategories[0];
 
       const replacePrompt = `
 You are CarbonAware AI, an expert climate scientist and personal carbon advisor.
-User Profile:
-- Total Monthly Carbon Footprint: ${totalEmission} tons CO2/mo
-- Transport Emission: ${transportEmission} tons CO2/mo (Mode: ${transportData.transportType || "Car"}, Fuel: ${transportData.fuelType || "Petrol"}, Distance: ${transportData.distanceKm || 20} km)
-- Food Emission: ${foodEmission} tons CO2/mo (Diet: ${foodData.dietType || "Mixed"}, Waste Level: ${foodData.foodWasteLevel || "Low"})
+The user's calculated monthly carbon footprint for the selected categories:
+${profileLines}
 
 The user just closed/dismissed: "${dismissedTitle || "Current Recommendation"}".
 They are currently seeing or have dismissed:
 ${allExcluded.map((t) => `- "${t}"`).join("\n")}
 
-Generate 1 BRAND NEW, distinct, highly actionable carbon reduction recommendation in the "${category}" category (or a related high-impact category like Transport, Food, Energy, Waste) specifically tailored to this user.
+Generate 1 BRAND NEW, distinct, highly actionable carbon reduction recommendation ONLY in the "${replaceCategory}" category, specifically tailored to the values above.
+Do NOT suggest anything outside the "${replaceCategory}" category. Base any savings estimate only on the emission values given above.
 Do NOT repeat or closely rephrase any of the excluded recommendations listed above.
 
 Return strictly a valid JSON object without markdown or code fences:
 {
   "id": "rec-${Date.now()}-${Math.floor(Math.random() * 1000)}",
-  "category": "${category}",
+  "category": "${replaceCategory}",
   "title": "Short practical title (under 8 words)",
   "impact": "Save ~X tons CO2/mo",
   "difficulty": "Easy",
   "co2Savings": "-X tons",
-  "iconType": "${category.toLowerCase().includes("food") ? "food" : category.toLowerCase().includes("waste") ? "waste" : "car"}",
+  "iconType": "${replaceCategory === "Food" ? "food" : "car"}",
   "desc": "2-3 practical sentences explaining how to execute this step and cut footprint...",
   "aiTip": "Actionable eco tip..."
 }
@@ -369,45 +436,52 @@ Return strictly a valid JSON object without markdown or code fences:
         }
       }
 
-      // Fallback to Adaptive Engine
-      if (!newRec) {
-        newRec = getAdaptiveAlternative(category, transportEmission, foodEmission, transportData, allExcluded);
+      // Reject AI output that drifted into another category; fall back to Adaptive Engine
+      if (!newRec || typeof newRec.title !== "string" || normalizeCategory(newRec.category) !== replaceCategory) {
+        newRec = getAdaptiveAlternative(replaceCategory, transportEmission, foodEmission, transportData, foodData, allExcluded);
+        aiModelUsed = "CarbonAware Adaptive AI";
+      } else {
+        newRec = { ...newRec, category: replaceCategory, id: newRec.id || `rec-${Date.now()}` };
       }
 
       return NextResponse.json({
         success: true,
         aiModel: aiModelUsed,
+        categories: selectedCategories,
         newRecommendation: newRec,
       });
     }
 
     // =========================================================================
-    // CASE B: GENERATE 3 RECOMMENDATIONS (Initial load or full regeneration)
+    // CASE B: GENERATE 3 RECOMMENDATIONS for the selected categories only
     // =========================================================================
-    let aiRecommendations = null;
+    const counts = allocateCounts(selectedCategories, transportEmission, foodEmission);
+    let aiRecommendations: Recommendation[] | null = null;
     let aiModelUsed = "Smart Adaptive Climate AI";
+
+    const countLines = selectedCategories.map((c) => `- ${counts[c]} recommendation(s) with "category": "${c}"`).join("\n");
 
     const promptText = `
 You are CarbonAware AI, an expert climate scientist and carbon footprint reduction advisor.
-Analyze the following user's carbon emission data:
-- Total Carbon Emission: ${totalEmission} metric tons CO2/month
-- Transport Emission: ${transportEmission} metric tons CO2/month (Mode: ${transportData.transportType || "Car"}, Fuel: ${transportData.fuelType || "Petrol"}, Distance: ${transportData.distanceKm || 20} km)
-- Food Emission: ${foodEmission} metric tons CO2/month (Diet: ${foodData.dietType || "Mixed"}, Waste Level: ${foodData.foodWasteLevel || "Low"})
+Analyze the user's calculated carbon emission data for the selected categories (${selectedCategories.join(", ")}):
+${profileLines}
 
 ${allExcluded.length > 0 ? `Do NOT repeat any of these previously shown recommendations:\n${allExcluded.map((t) => `- "${t}"`).join("\n")}` : ""}
 
-Provide 3 highly practical, personalized carbon reduction recommendations in valid JSON format.
-Ensure 1 recommendation is for Transport, 1 for Food, and 1 for Waste/Energy/Lifestyle.
+Provide exactly ${TOTAL_RECOMMENDATIONS} highly practical, personalized carbon reduction recommendations:
+${countLines}
+Only use these categories: ${selectedCategories.map((c) => `"${c}"`).join(", ")}. Do NOT include Energy, Waste, Lifestyle or any other category.
+Each recommendation must refer to the user's values above, and any savings estimate must be based only on those emission values.
 Return strictly a JSON array without markdown formatting or code blocks:
 [
   {
     "id": "rec-1",
-    "category": "Transport",
+    "category": "${selectedCategories[0]}",
     "title": "Short title",
     "impact": "Save ~X tons CO2/mo",
     "difficulty": "Easy",
     "co2Savings": "-X tons",
-    "iconType": "car",
+    "iconType": "${selectedCategories[0] === "Food" ? "food" : "car"}",
     "desc": "Detailed practical explanation...",
     "aiTip": "Actionable eco tip..."
   }
@@ -433,7 +507,7 @@ Return strictly a JSON array without markdown formatting or code blocks:
               messages: [
                 {
                   role: "system",
-                  content: "You are CarbonAware AI, a climate scientist. You must return strictly a valid JSON array of 3 carbon reduction recommendations without extra commentary.",
+                  content: `You are CarbonAware AI, a climate scientist. You must return strictly a valid JSON array of ${TOTAL_RECOMMENDATIONS} carbon reduction recommendations, only in the requested categories, without extra commentary.`,
                 },
                 {
                   role: "user",
@@ -498,17 +572,22 @@ Return strictly a JSON array without markdown formatting or code blocks:
       }
     }
 
-    // 2C. Tertiary: Adaptive Climate AI Pool
-    if (!aiRecommendations || aiRecommendations.length === 0) {
-      aiRecommendations = generateAdaptiveAIRecommendations(
-        transportEmission,
-        foodEmission,
-        totalEmission,
-        transportData,
-        foodData,
-        allExcluded
-      );
-    }
+    // 2C. Enforce categories (drops off-category AI output) and fill gaps from the Adaptive Climate AI Pool
+    if (!aiRecommendations || aiRecommendations.length === 0) aiModelUsed = "Smart Adaptive Climate AI";
+    const finalRecommendations = enforceCategories(
+      aiRecommendations || [],
+      counts,
+      transportEmission,
+      foodEmission,
+      transportData,
+      foodData,
+      allExcluded
+    );
+
+    const breakdown = [
+      includeTransport ? `${transportEmission.toFixed(2)}t transport` : null,
+      includeFood ? `${foodEmission.toFixed(2)}t food` : null,
+    ].filter(Boolean).join(", ");
 
     return NextResponse.json({
       success: true,
@@ -516,8 +595,9 @@ Return strictly a JSON array without markdown formatting or code blocks:
       totalEmission,
       transportEmission,
       foodEmission,
-      recommendations: aiRecommendations,
-      summary: `AI analyzed your ${totalEmission.toFixed(2)} tons CO₂ monthly footprint (${transportEmission.toFixed(2)}t transport, ${foodEmission.toFixed(2)}t food) and generated customized reduction steps.`,
+      categories: selectedCategories,
+      recommendations: finalRecommendations,
+      summary: `AI analyzed your ${selectedCategories.join(" & ")} footprint (${breakdown}) and generated customized ${selectedCategories.join(" & ")} reduction steps.`,
     });
   } catch (error: any) {
     console.error("Error in AI recommendations endpoint:", error);
