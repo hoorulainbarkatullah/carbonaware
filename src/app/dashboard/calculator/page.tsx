@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import LocationPicker from "@/components/calculator/LocationPicker";
+import type { MapTarget } from "@/components/calculator/RouteMap";
+import { GeoPoint, fetchRoute, reverseGeocode, formatCoords, isSameLocation } from "@/lib/geo";
+import { RecCategory, requestRecommendations, writeStoredRecommendations } from "@/lib/aiRecommendations";
 import {
+  Loader2,
+  RefreshCw,
+  Route,
   Car,
   Zap,
   Leaf,
-  MapPin,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -22,6 +29,40 @@ import {
   X
 } from "lucide-react";
 
+// Leaflet needs the browser, so the map is only rendered client-side
+const RouteMap = dynamic(() => import("@/components/calculator/RouteMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-56 sm:h-64 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] font-bold text-gray-400">
+      Loading map...
+    </div>
+  ),
+});
+
+type TransportType = "car" | "motorbike" | "bus" | "train" | "bicycle" | "walking";
+type FuelType = "Petrol" | "Diesel" | "Hybrid" | "Electric";
+
+// Inputs used by the last successful Calculate (plus its route result)
+type TransportSnapshot = {
+  start: GeoPoint;
+  destination: GeoPoint;
+  transportType: TransportType;
+  fuelType: FuelType;
+  tripsPerWeek: number;
+  distanceKm: number;
+  path: [number, number][];
+};
+
+type FoodSnapshot = {
+  dietType: "vegan" | "vegetarian" | "mixed" | "meat-heavy";
+  mealsPerDay: number;
+  localFoodPct: number;
+  foodWasteLevel: "low" | "medium" | "high";
+  wasteMgmt: "recycle" | "compost" | "sometimes" | "never";
+};
+
+const samePoint = (a: GeoPoint | null, b: GeoPoint | null) => !!a && !!b && a.lat === b.lat && a.lon === b.lon;
+
 export default function CalculatorPage() {
   // Active tab state (for mobile responsive view toggling)
   const [activeTab, setActiveTab] = useState<"transport" | "food">("transport");
@@ -36,11 +77,13 @@ export default function CalculatorPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // --- Transport Input States (Start Clean & Empty) ---
-  const [fromLocation, setFromLocation] = useState("");
-  const [toLocation, setToLocation] = useState("");
+  // Start / Destination are picked via search, current location, or the map
+  const [startPoint, setStartPoint] = useState<GeoPoint | null>(null);
+  const [destinationPoint, setDestinationPoint] = useState<GeoPoint | null>(null);
+  const [mapTarget, setMapTarget] = useState<MapTarget>("start");
+  const [mapNotice, setMapNotice] = useState<Record<MapTarget, string | null>>({ start: null, destination: null });
   const [transportType, setTransportType] = useState<"car" | "motorbike" | "bus" | "train" | "bicycle" | "walking">("car");
   const [fuelType, setFuelType] = useState<"Petrol" | "Diesel" | "Hybrid" | "Electric">("Petrol");
-  const [distanceKm, setDistanceKm] = useState<number>(0);
   const [tripsPerWeek, setTripsPerWeek] = useState<number>(0);
 
   // --- Food & Waste Input States (Start Clean & Empty) ---
@@ -51,12 +94,22 @@ export default function CalculatorPage() {
   const [wasteMgmt, setWasteMgmt] = useState<"recycle" | "compost" | "sometimes" | "never">("recycle");
 
   // --- Calculations ---
+  // Results only change when a Calculate button succeeds (no live preview from inputs)
   const [transportFootprint, setTransportFootprint] = useState<number>(0.0);
   const [foodFootprint, setFoodFootprint] = useState<number>(0.0);
   const [totalFootprint, setTotalFootprint] = useState<number>(0.0);
 
   const [transportPct, setTransportPct] = useState<number>(0);
   const [foodPct, setFoodPct] = useState<number>(0);
+
+  // Snapshots of the inputs used by the last successful Calculate, to detect outdated results
+  const [transportSnapshot, setTransportSnapshot] = useState<TransportSnapshot | null>(null);
+  const [foodSnapshot, setFoodSnapshot] = useState<FoodSnapshot | null>(null);
+  const [isCalculatingTransport, setIsCalculatingTransport] = useState(false);
+  const [isCalculatingFood, setIsCalculatingFood] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [recsStatus, setRecsStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
+  const [recsCategories, setRecsCategories] = useState<RecCategory[]>([]);
 
   // Helper to retrieve logged in user ID or email
   const getUserId = () => {
@@ -73,66 +126,68 @@ export default function CalculatorPage() {
     return undefined;
   };
 
-  // Calculate live results client-side when inputs change for active tab
-  useEffect(() => {
-    // 1. Transport Calculation (Isolated to Transport input)
-    let calcTransport = 0;
-    if (distanceKm > 0 && tripsPerWeek > 0) {
-      let emissionPerKm = 0.192;
-      if (transportType === "car") {
-        if (fuelType === "Diesel") emissionPerKm = 0.171;
-        else if (fuelType === "Hybrid") emissionPerKm = 0.108;
-        else if (fuelType === "Electric") emissionPerKm = 0.045;
-        else emissionPerKm = 0.192;
-      } else if (transportType === "motorbike") {
-        if (fuelType === "Electric") emissionPerKm = 0.025;
-        else emissionPerKm = 0.103;
-      } else if (transportType === "bus") {
-        emissionPerKm = 0.089;
-      } else if (transportType === "train") {
-        emissionPerKm = 0.035;
-      } else if (transportType === "bicycle" || transportType === "walking") {
-        emissionPerKm = 0.0;
-      }
+  const sameLocation = !!startPoint && !!destinationPoint && isSameLocation(startPoint, destinationPoint);
 
-      const monthlyDistanceKm = distanceKm * tripsPerWeek * 4.33;
-      calcTransport = (monthlyDistanceKm * emissionPerKm) / 1000;
+  // Values from the last calculation (never recomputed from the current, unsubmitted inputs)
+  const fromLocation = transportSnapshot?.start.name ?? "";
+  const toLocation = transportSnapshot?.destination.name ?? "";
+  const distanceKm = transportSnapshot?.distanceKm ?? 0;
+
+  const routeMatchesMarkers =
+    !!transportSnapshot &&
+    samePoint(transportSnapshot.start, startPoint) &&
+    samePoint(transportSnapshot.destination, destinationPoint);
+  const routePath = routeMatchesMarkers ? transportSnapshot!.path : null;
+
+  const transportOutdated =
+    !!transportSnapshot &&
+    (!routeMatchesMarkers ||
+      transportSnapshot.transportType !== transportType ||
+      transportSnapshot.fuelType !== fuelType ||
+      transportSnapshot.tripsPerWeek !== tripsPerWeek);
+
+  const foodOutdated =
+    !!foodSnapshot &&
+    (foodSnapshot.dietType !== dietType ||
+      foodSnapshot.mealsPerDay !== mealsPerDay ||
+      foodSnapshot.localFoodPct !== localFoodPct ||
+      foodSnapshot.foodWasteLevel !== foodWasteLevel ||
+      foodSnapshot.wasteMgmt !== wasteMgmt);
+
+  // Map click / marker drag: use the coordinates immediately, then look up a readable name
+  const handleMapPick = async (target: MapTarget, lat: number, lon: number) => {
+    const setPoint = target === "start" ? setStartPoint : setDestinationPoint;
+    setMapNotice((n) => ({ ...n, [target]: null }));
+    setPoint({ name: formatCoords(lat, lon), lat, lon });
+
+    if (target === "start" && !destinationPoint) setMapTarget("destination");
+
+    try {
+      const name = await reverseGeocode(lat, lon);
+      setPoint((p) => (p && p.lat === lat && p.lon === lon ? { ...p, name } : p));
+    } catch {
+      setMapNotice((n) => ({ ...n, [target]: "Couldn't find a place name for this point, so coordinates are shown instead." }));
     }
-    setTransportFootprint(parseFloat(calcTransport.toFixed(2)));
+  };
 
-    // 2. Food Calculation (Isolated to Food input)
-    let calcFood = 0;
-    if (mealsPerDay > 0) {
-      let dietBase = 0.20;
-      if (dietType === "vegan") dietBase = 0.10;
-      else if (dietType === "vegetarian") dietBase = 0.14;
-      else if (dietType === "meat-heavy") dietBase = 0.28;
-
-      const mealFactor = mealsPerDay / 3.0;
-      const localMultiplier = 1.0 - (localFoodPct / 100) * 0.20;
-      let wasteMultiplier = 1.0;
-      if (foodWasteLevel === "medium") wasteMultiplier = 1.15;
-      else if (foodWasteLevel === "high") wasteMultiplier = 1.30;
-
-      let wasteMgmtBonus = 0.0;
-      if (wasteMgmt === "compost" || wasteMgmt === "recycle") wasteMgmtBonus = -0.02;
-      else if (wasteMgmt === "never") wasteMgmtBonus = 0.04;
-
-      calcFood = Math.max(0.0, (dietBase * mealFactor * localMultiplier * wasteMultiplier) + wasteMgmtBonus);
+  const handlePickerChange = (target: MapTarget, point: GeoPoint | null) => {
+    setMapNotice((n) => ({ ...n, [target]: null }));
+    if (target === "start") {
+      setStartPoint(point);
+      if (point && !destinationPoint) setMapTarget("destination");
+    } else {
+      setDestinationPoint(point);
     }
-    setFoodFootprint(parseFloat(calcFood.toFixed(2)));
+  };
 
-  }, [
-    transportType,
-    fuelType,
-    distanceKm,
-    tripsPerWeek,
-    dietType,
-    mealsPerDay,
-    localFoodPct,
-    foodWasteLevel,
-    wasteMgmt
-  ]);
+  // Basic input validation only – the route is requested when Calculate Transport is clicked
+  const routeMessage = (() => {
+    if (!startPoint && !destinationPoint) return "Select a start location and a destination, then click Calculate Transport.";
+    if (!startPoint) return "Select a start location.";
+    if (!destinationPoint) return "Select a destination.";
+    if (sameLocation) return "Start and destination are the same. Please choose two different locations.";
+    return null;
+  })();
 
   // Sync total emissions and percentages based on calculated categories
   useEffect(() => {
@@ -170,6 +225,44 @@ export default function CalculatorPage() {
     setSuccessMessage(null);
   };
 
+  // Generate AI recommendations for exactly the categories calculated in this session,
+  // based on the calculation just saved. Runs only after a Calculate button succeeds.
+  const refreshRecommendations = async (calcId: string, categories: RecCategory[]) => {
+    const uid = getUserId();
+    setRecsCategories(categories);
+    setRecsStatus("generating");
+    const base = {
+      calculationId: calcId,
+      categories,
+      summary: "",
+      aiModel: "CarbonAware AI",
+      totalEmission: 0,
+      transportEmission: 0,
+      foodEmission: 0,
+    };
+    writeStoredRecommendations(uid, { ...base, status: "pending", recommendations: [], updatedAt: Date.now() });
+
+    try {
+      const data = await requestRecommendations({ userId: uid, calculationId: calcId, categories });
+      if (!data.success) throw new Error("Recommendations request was not successful");
+      writeStoredRecommendations(uid, {
+        ...base,
+        status: "ready",
+        recommendations: data.recommendations || [],
+        summary: data.summary || "",
+        aiModel: data.aiModel || "CarbonAware AI",
+        totalEmission: data.totalEmission || 0,
+        transportEmission: data.transportEmission || 0,
+        foodEmission: data.foodEmission || 0,
+        updatedAt: Date.now(),
+      });
+      setRecsStatus("ready");
+    } catch (err) {
+      console.error("Failed to generate AI recommendations:", err);
+      setRecsStatus("error");
+    }
+  };
+
   // Clear / Reset Calculator function to start fresh calculation
   const handleClearCalculator = () => {
     clearAlerts();
@@ -179,49 +272,74 @@ export default function CalculatorPage() {
     setIsFoodCalculated(false);
     setIsCompleted(false);
 
-    setFromLocation("");
-    setToLocation("");
+    setStartPoint(null);
+    setDestinationPoint(null);
+    setMapTarget("start");
+    setMapNotice({ start: null, destination: null });
     setTransportType("car");
     setFuelType("Petrol");
-    setDistanceKm(0);
     setTripsPerWeek(0);
+    setTransportSnapshot(null);
+    setRouteError(null);
 
     setDietType("mixed");
     setMealsPerDay(0);
     setLocalFoodPct(0);
     setFoodWasteLevel("low");
     setWasteMgmt("recycle");
+    setFoodSnapshot(null);
 
     setTransportFootprint(0.0);
     setFoodFootprint(0.0);
     setTotalFootprint(0.0);
     setTransportPct(0);
     setFoodPct(0);
+    setRecsStatus("idle");
+    setRecsCategories([]);
 
     setSuccessMessage("Calculator reset! All fields cleared for new input.");
   };
 
-  // Handle Calculate Transport action independently
+  // Handle Calculate Transport: route distance → emission → recommendations, all on click
   const handleCalculateTransport = async () => {
     clearAlerts();
+    if (isCalculatingTransport) return;
 
-    if (distanceKm <= 0 || tripsPerWeek <= 0) {
-      setErrorMessage("Please enter valid distance (KM) and trips per week.");
+    if (routeMessage || !startPoint || !destinationPoint) {
+      setErrorMessage(routeMessage || "Please select a start location and a destination.");
+      return;
+    }
+    if (tripsPerWeek <= 0) {
+      setErrorMessage("Please enter valid trips per week.");
       return;
     }
 
+    // Freeze the inputs being calculated so later edits mark the result as outdated
+    const inputs = { start: startPoint, destination: destinationPoint, transportType, fuelType, tripsPerWeek };
+    setIsCalculatingTransport(true);
+    setRouteError(null);
+
     try {
+      let route;
+      try {
+        route = await fetchRoute(inputs.start, inputs.destination, inputs.transportType);
+      } catch (err) {
+        console.error("Route calculation failed:", err);
+        setRouteError("Couldn't calculate the road distance. Check your connection and try again, or adjust the locations.");
+        return;
+      }
+
       const payload = {
         action: "transport",
         userId: getUserId(),
         calculationId,
         transportData: {
-          fromLocation,
-          toLocation,
-          transportType,
-          fuelType,
-          distanceKm,
-          tripsPerWeek
+          fromLocation: inputs.start.name,
+          toLocation: inputs.destination.name,
+          transportType: inputs.transportType,
+          fuelType: inputs.fuelType,
+          distanceKm: route.distanceKm,
+          tripsPerWeek: inputs.tripsPerWeek
         }
       };
 
@@ -242,40 +360,42 @@ export default function CalculatorPage() {
         if (data.calculation.transportEmission !== null) {
           setTransportFootprint(data.calculation.transportEmission);
         }
+        setTransportSnapshot({ ...inputs, distanceKm: route.distanceKm, path: route.path });
         setHasCalculated(true);
         setIsTransportCalculated(true);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("userUpdated"));
         }
         setSuccessMessage("Transport footprint calculated & recorded independently!");
+        refreshRecommendations(data.calculation.id, isFoodCalculated ? ["Transport", "Food"] : ["Transport"]);
       }
     } catch (err) {
       console.error("Failed to calculate transport emission:", err);
       setErrorMessage("An unexpected network error occurred.");
+    } finally {
+      setIsCalculatingTransport(false);
     }
   };
 
   // Handle Calculate Food action
   const handleCalculateFood = async () => {
     clearAlerts();
+    if (isCalculatingFood) return;
 
     if (mealsPerDay < 1 || localFoodPct < 0 || localFoodPct > 100) {
       setErrorMessage("Please enter valid food parameters.");
       return;
     }
 
+    const inputs: FoodSnapshot = { dietType, mealsPerDay, localFoodPct, foodWasteLevel, wasteMgmt };
+    setIsCalculatingFood(true);
+
     try {
       const payload = {
         action: "food",
         userId: getUserId(),
         calculationId,
-        foodData: {
-          dietType,
-          mealsPerDay,
-          localFoodPct,
-          foodWasteLevel,
-          wasteMgmt
-        }
+        foodData: inputs
       };
 
       const res = await fetch("/api/calculator", {
@@ -295,43 +415,54 @@ export default function CalculatorPage() {
         if (data.calculation.foodEmission !== null) {
           setFoodFootprint(data.calculation.foodEmission);
         }
+        setFoodSnapshot(inputs);
         setHasCalculated(true);
         setIsFoodCalculated(true);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("userUpdated"));
         }
         setSuccessMessage("Food footprint calculated & recorded independently!");
+        refreshRecommendations(data.calculation.id, isTransportCalculated ? ["Transport", "Food"] : ["Food"]);
       }
     } catch (err) {
       console.error("Failed to calculate food emission:", err);
       setErrorMessage("An unexpected network error occurred.");
+    } finally {
+      setIsCalculatingFood(false);
     }
   };
 
-  // Handle Save Result / Final calculation
+  // Handle Save Result / Final calculation – saves the values from the last Calculate, not unsubmitted edits
   const handleSaveResult = async () => {
     clearAlerts();
+
+    if (!transportSnapshot && !foodSnapshot) {
+      setErrorMessage("Please calculate your transport or food footprint before saving.");
+      return;
+    }
+    if (transportOutdated || foodOutdated) {
+      setErrorMessage("Your inputs changed since the last calculation. Click Calculate again before saving.");
+      return;
+    }
 
     try {
       const payload = {
         action: "complete",
         userId: getUserId(),
         calculationId,
-        transportData: {
-          fromLocation,
-          toLocation,
-          transportType,
-          fuelType,
-          distanceKm,
-          tripsPerWeek
-        },
-        foodData: {
-          dietType,
-          mealsPerDay,
-          localFoodPct,
-          foodWasteLevel,
-          wasteMgmt
-        }
+        ...(transportSnapshot
+          ? {
+              transportData: {
+                fromLocation,
+                toLocation,
+                transportType: transportSnapshot.transportType,
+                fuelType: transportSnapshot.fuelType,
+                distanceKm,
+                tripsPerWeek: transportSnapshot.tripsPerWeek
+              }
+            }
+          : {}),
+        ...(foodSnapshot ? { foodData: foodSnapshot } : {})
       };
 
       const res = await fetch("/api/calculator", {
@@ -491,47 +622,80 @@ export default function CalculatorPage() {
               {/* Commute Inputs */}
               <div className="space-y-3.5 pt-2">
                 {/* From Location */}
-                <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Start Location</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={fromLocation}
-                      onChange={(e) => setFromLocation(e.target.value)}
-                      placeholder="Enter start location..."
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-                    />
-                  </div>
-                </div>
+                <LocationPicker
+                  label="Start Location"
+                  placeholder="Search a Peshawar area, e.g. Hayatabad..."
+                  variant="start"
+                  value={startPoint}
+                  onChange={(p) => handlePickerChange("start", p)}
+                  externalNotice={mapNotice.start}
+                />
 
                 {/* Destination Location */}
+                <LocationPicker
+                  label="Destination"
+                  placeholder="Search a Peshawar area, e.g. Saddar..."
+                  variant="destination"
+                  value={destinationPoint}
+                  onChange={(p) => handlePickerChange("destination", p)}
+                  externalNotice={mapNotice.destination}
+                />
+
+                {/* Map selection */}
                 <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Destination</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      value={toLocation}
-                      onChange={(e) => setToLocation(e.target.value)}
-                      placeholder="Enter destination..."
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-                    />
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                    <label className="block text-[10px] uppercase font-black text-gray-400">Or Pick On Map</label>
+                    <div className="flex bg-gray-50 border border-gray-200 rounded-lg p-0.5">
+                      {([
+                        { id: "start", label: "Set Start", dot: "bg-emerald-500" },
+                        { id: "destination", label: "Set Destination", dot: "bg-red-500" },
+                      ] as const).map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setMapTarget(t.id)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black transition cursor-pointer ${
+                            mapTarget === t.id ? "bg-white text-gray-800 shadow-sm" : "text-gray-400 hover:text-gray-700"
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${t.dot}`} />
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <RouteMap
+                    start={startPoint}
+                    destination={destinationPoint}
+                    path={routePath}
+                    activeTarget={mapTarget}
+                    onPick={handleMapPick}
+                  />
+                  <p className="mt-1.5 text-[10px] font-semibold text-gray-400">
+                    Tap the map to place the {mapTarget === "start" ? "Start (A)" : "Destination (B)"} marker. Drag markers to adjust.
+                  </p>
                 </div>
 
                 {/* Distance & Trips per week */}
                 <div className="grid grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Distance (KM)</label>
+                    <label className="block text-[10px] uppercase font-black text-gray-400 mb-1.5">Distance (KM) · Auto</label>
                     <div className="relative">
-                      <input
-                        type="number"
-                        min="0"
-                        value={distanceKm}
-                        onChange={(e) => setDistanceKm(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-                      />
+                      <div className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold text-gray-800 flex items-center gap-1.5 min-h-[38px]">
+                        {isCalculatingTransport ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                            <span className="text-gray-400">Calculating...</span>
+                          </>
+                        ) : transportSnapshot ? (
+                          <>
+                            <Route className={`w-3.5 h-3.5 ${transportOutdated ? "text-amber-500" : "text-emerald-600"}`} />
+                            <span className={transportOutdated ? "text-gray-400 line-through" : ""}>{distanceKm.toFixed(2)}</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </div>
                       <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">km</span>
                     </div>
                   </div>
@@ -551,6 +715,42 @@ export default function CalculatorPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Route status (one-way road distance per trip) */}
+                {routeError ? (
+                  <div className="text-[10px] font-bold flex items-start justify-between gap-2 text-red-600">
+                    <span className="flex items-start gap-1">
+                      <AlertCircle className="w-3 h-3 mt-px flex-shrink-0" />
+                      <span>{routeError}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCalculateTransport}
+                      className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-black whitespace-nowrap cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry
+                    </button>
+                  </div>
+                ) : routeMessage ? (
+                  <div className={`text-[10px] font-bold flex items-start gap-1 ${sameLocation ? "text-red-600" : "text-gray-400"}`}>
+                    <AlertCircle className="w-3 h-3 mt-px flex-shrink-0" />
+                    <span>{routeMessage}</span>
+                  </div>
+                ) : transportOutdated ? (
+                  <p className="text-[10px] font-bold text-amber-600 flex items-start gap-1">
+                    <AlertCircle className="w-3 h-3 mt-px flex-shrink-0" />
+                    <span>Inputs changed since the last calculation. Click Calculate Transport to update the distance and results.</span>
+                  </p>
+                ) : transportSnapshot ? (
+                  <p className="text-[10px] font-semibold text-gray-400">
+                    One-way road distance per trip, calculated from the selected route.
+                  </p>
+                ) : (
+                  <p className="text-[10px] font-semibold text-gray-400">
+                    The road distance is calculated when you click Calculate Transport.
+                  </p>
+                )}
 
                 {/* Transport Type selector grid */}
                 <div>
@@ -608,10 +808,11 @@ export default function CalculatorPage() {
             <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
               <button
                 onClick={handleCalculateTransport}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs"
+                disabled={isCalculatingTransport}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs disabled:opacity-70 disabled:cursor-wait"
               >
-                <span>Calculate Transport</span>
-                <Calculator className="w-4 h-4" />
+                <span>{isCalculatingTransport ? "Calculating..." : "Calculate Transport"}</span>
+                {isCalculatingTransport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
               </button>
 
               {/* Did you know callout */}
@@ -764,10 +965,11 @@ export default function CalculatorPage() {
             <div className="space-y-4 pt-4 border-t border-gray-100 mt-4">
               <button
                 onClick={handleCalculateFood}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs"
+                disabled={isCalculatingFood}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer text-xs disabled:opacity-70 disabled:cursor-wait"
               >
-                <span>Calculate Food</span>
-                <Calculator className="w-4 h-4" />
+                <span>{isCalculatingFood ? "Calculating..." : "Calculate Food"}</span>
+                {isCalculatingFood ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -779,7 +981,7 @@ export default function CalculatorPage() {
           <div className="space-y-5">
             <div>
               <h3 className="text-sm font-extrabold text-gray-900">Your Carbon Footprint</h3>
-              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Live estimated breakdown</p>
+              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Updated when you click Calculate</p>
             </div>
 
             {/* Circular Gauge */}
@@ -822,7 +1024,7 @@ export default function CalculatorPage() {
                       ? "Transport Calculated Individually 🚗"
                       : isFoodCalculated
                       ? "Food Calculated Individually 🍲"
-                      : "Live Estimated Preview"}
+                      : "Not Calculated Yet"}
                   </span>
                 </div>
               </div>
@@ -836,7 +1038,11 @@ export default function CalculatorPage() {
                   <div className="flex items-center gap-2">
                     <Car className="w-4 h-4 text-emerald-600" />
                     <span>Transport Emission</span>
-                    {isTransportCalculated && (
+                    {transportOutdated ? (
+                      <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title="Inputs changed – click Calculate Transport to update">
+                        Outdated
+                      </span>
+                    ) : isTransportCalculated && (
                       <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                         Recorded
                       </span>
@@ -863,7 +1069,11 @@ export default function CalculatorPage() {
                   <div className="flex items-center gap-2">
                     <UtensilsCrossed className="w-4 h-4 text-amber-600" />
                     <span>Food Emission</span>
-                    {isFoodCalculated && (
+                    {foodOutdated ? (
+                      <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" title="Inputs changed – click Calculate Food to update">
+                        Outdated
+                      </span>
+                    ) : isFoodCalculated && (
                       <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                         Recorded
                       </span>
@@ -917,6 +1127,30 @@ export default function CalculatorPage() {
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
+
+            {/* AI recommendation status – generated only after a successful Calculate */}
+            {recsStatus !== "idle" && (
+              <p
+                className={`text-[10px] font-bold flex items-center gap-1.5 ${
+                  recsStatus === "error" ? "text-red-600" : recsStatus === "ready" ? "text-emerald-700" : "text-gray-400"
+                }`}
+              >
+                {recsStatus === "generating" ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : recsStatus === "error" ? (
+                  <AlertCircle className="w-3 h-3" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3" />
+                )}
+                <span>
+                  {recsStatus === "generating"
+                    ? `Generating ${recsCategories.join(" & ")} AI recommendations...`
+                    : recsStatus === "ready"
+                      ? `AI recommendations updated for ${recsCategories.join(" & ")}.`
+                      : "Couldn't generate AI recommendations. Click Calculate again to retry."}
+                </span>
+              </p>
+            )}
           </div>
 
         </div>
