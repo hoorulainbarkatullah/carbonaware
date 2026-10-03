@@ -20,6 +20,11 @@ import {
   Shield
 } from "lucide-react";
 
+// Pulse placeholder shown while the first dashboard stats request is in flight
+const Skeleton = ({ className = "" }: { className?: string }) => (
+  <span className={`inline-block animate-pulse rounded-md bg-gray-200/70 align-middle ${className}`} />
+);
+
 export default function DashboardPage() {
   const [hoveredDataIndex, setHoveredDataIndex] = useState<number | null>(null);
   const [timeframe, setTimeframe] = useState("Monthly");
@@ -28,30 +33,20 @@ export default function DashboardPage() {
   const [userInitials, setUserInitials] = useState("AK");
 
   // --- Real DB State ---
+  // Values start at zero/empty; nothing is rendered as real data until the first API response arrives.
   const [loading, setLoading] = useState(true);
+  const [hasFetched, setHasFetched] = useState(false);
   const [hasData, setHasData] = useState(false);
-  const [totalEmission, setTotalEmission] = useState(2.4);
-  const [transportEmission, setTransportEmission] = useState(1.08);
-  const [foodEmission, setFoodEmission] = useState(0.36);
-  const [monthlyAverage, setMonthlyAverage] = useState(2.5);
-  const [percentageChange, setPercentageChange] = useState(-10);
-  const [totalCalculationsCount, setTotalCalculationsCount] = useState(5);
+  const [totalEmission, setTotalEmission] = useState(0);
+  const [transportEmission, setTransportEmission] = useState(0);
+  const [foodEmission, setFoodEmission] = useState(0);
+  const [monthlyAverage, setMonthlyAverage] = useState(0);
+  const [percentageChange, setPercentageChange] = useState(0);
+  const [totalCalculationsCount, setTotalCalculationsCount] = useState(0);
 
-  const [lineChartData, setLineChartData] = useState([
-    { month: "Jan", val: 2.0 },
-    { month: "Feb", val: 3.0 },
-    { month: "Mar", val: 2.5 },
-    { month: "Apr", val: 2.0 },
-    { month: "May", val: 2.4 },
-    { month: "Jun", val: 2.4 },
-  ]);
+  const [lineChartData, setLineChartData] = useState<{ month: string; val: number }[]>([]);
 
-  const [breakdownData, setBreakdownData] = useState([
-    { name: "Transport", pct: 45, val: 1.08, color: "#16a34a" },
-    { name: "Electricity", pct: 30, val: 0.72, color: "#3b82f6" },
-    { name: "Food", pct: 15, val: 0.36, color: "#f59e0b" },
-    { name: "Others", pct: 10, val: 0.24, color: "#a855f7" },
-  ]);
+  const [breakdownData, setBreakdownData] = useState<{ name: string; pct: number; val: number; color: string }[]>([]);
 
   // Real Dynamic Widgets State from MongoDB
   const [badges, setBadges] = useState<any[]>([]);
@@ -61,8 +56,11 @@ export default function DashboardPage() {
   const [learningWidget, setLearningWidget] = useState<any>({
     title: "What is Carbon Footprint?",
     desc: "Learn the basics of carbon footprint and its impact on climate change.",
-    progress: 75,
+    progress: 0,
   });
+
+  // Skeletons only on the first load, so later refetches don't flash the whole dashboard
+  const isInitialLoading = loading && !hasFetched;
 
   const fetchDashboardStats = async () => {
     try {
@@ -103,8 +101,8 @@ export default function DashboardPage() {
           if (data.monthlyAverage !== undefined) setMonthlyAverage(data.monthlyAverage);
           if (data.percentageChange !== undefined) setPercentageChange(data.percentageChange);
           if (data.totalCalculations !== undefined) setTotalCalculationsCount(data.totalCalculations);
-          if (data.lineChartData && data.lineChartData.length > 0) setLineChartData(data.lineChartData);
-          if (data.breakdownData && data.breakdownData.length > 0) setBreakdownData(data.breakdownData);
+          setLineChartData(data.lineChartData || []);
+          setBreakdownData(data.breakdownData || []);
 
           if (data.badges) setBadges(data.badges);
           if (data.leaderboard) setLeaderboard(data.leaderboard);
@@ -117,6 +115,7 @@ export default function DashboardPage() {
       console.error("Failed to fetch dashboard stats:", err);
     } finally {
       setLoading(false);
+      setHasFetched(true);
     }
   };
 
@@ -175,7 +174,8 @@ export default function DashboardPage() {
                 Latest Footprint
               </span>
               <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none">
-                {totalEmission.toFixed(2)} <span className="text-sm font-extrabold text-gray-500">tons CO₂e</span>
+                {isInitialLoading ? <Skeleton className="h-7 w-20" /> : totalEmission.toFixed(2)}{" "}
+                <span className="text-sm font-extrabold text-gray-500">tons CO₂e</span>
               </h2>
             </div>
             <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
@@ -184,12 +184,21 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 text-xs font-bold pt-2 border-t border-gray-100">
-            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-              Transport: {transportEmission.toFixed(2)}t
-            </span>
-            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-              Food: {foodEmission.toFixed(2)}t
-            </span>
+            {isInitialLoading ? (
+              <>
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-5 w-20" />
+              </>
+            ) : (
+              <>
+                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                  Transport: {transportEmission.toFixed(2)}t
+                </span>
+                <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                  Food: {foodEmission.toFixed(2)}t
+                </span>
+              </>
+            )}
           </div>
         </section>
 
@@ -201,7 +210,8 @@ export default function DashboardPage() {
                 Monthly Average
               </span>
               <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none">
-                {monthlyAverage.toFixed(2)} <span className="text-sm font-extrabold text-gray-500">tons/mo</span>
+                {isInitialLoading ? <Skeleton className="h-7 w-20" /> : monthlyAverage.toFixed(2)}{" "}
+                <span className="text-sm font-extrabold text-gray-500">tons/mo</span>
               </h2>
             </div>
             <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100">
@@ -210,7 +220,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center justify-between text-xs font-semibold text-gray-500 pt-2 border-t border-gray-100">
-            <span>Based on {totalCalculationsCount} calculations</span>
+            {isInitialLoading ? <Skeleton className="h-4 w-32" /> : <span>Based on {totalCalculationsCount} calculations</span>}
             <span className="text-emerald-600 font-extrabold">Target: &lt; 2.50t</span>
           </div>
         </section>
@@ -223,10 +233,16 @@ export default function DashboardPage() {
                 Progress Trend
               </span>
               <h2 className="text-3xl font-black text-gray-900 mt-1 leading-none flex items-center gap-1.5">
-                <span>{percentageChange < 0 ? `${percentageChange}%` : `+${percentageChange}%`}</span>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                  {percentageChange < 0 ? "Reduction" : "Increase"}
-                </span>
+                {isInitialLoading ? (
+                  <Skeleton className="h-7 w-28" />
+                ) : (
+                  <>
+                    <span>{percentageChange < 0 ? `${percentageChange}%` : `+${percentageChange}%`}</span>
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                      {percentageChange < 0 ? "Reduction" : "Increase"}
+                    </span>
+                  </>
+                )}
               </h2>
             </div>
             <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600 border border-purple-100">
@@ -344,6 +360,17 @@ export default function DashboardPage() {
                   ))}
                 </svg>
 
+                {/* Loading / empty overlay */}
+                {isInitialLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Skeleton className="h-full w-full rounded-xl" />
+                  </div>
+                ) : lineChartData.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="text-[11px] text-gray-400 font-semibold">No calculations yet</p>
+                  </div>
+                )}
+
                 {/* Interactive Tooltip Overlay */}
                 {hoveredDataIndex !== null && points[hoveredDataIndex] && (
                   <div
@@ -394,13 +421,16 @@ export default function DashboardPage() {
 
                   {/* Donut cutout text */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-base font-black text-gray-800 leading-tight">{totalEmission.toFixed(2)}</span>
+                    <span className="text-base font-black text-gray-800 leading-tight">
+                      {isInitialLoading ? <Skeleton className="h-4 w-10" /> : totalEmission.toFixed(2)}
+                    </span>
                     <span className="text-[8px] text-gray-400 font-bold uppercase tracking-tight">tons CO₂e</span>
                   </div>
                 </div>
 
                 {/* Legend list */}
                 <div className="flex-1 space-y-1.5">
+                  {isInitialLoading && [0, 1].map((i) => <Skeleton key={i} className="h-6 w-full" />)}
                   {breakdownData.map((item) => (
                     <div key={item.name} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
@@ -437,6 +467,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 flex-grow items-center">
+                {isInitialLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[92px] w-full rounded-2xl" />)}
                 {badges.map((badge, idx) => {
                   const isUnlocked = badge.active && !badge.locked;
 
@@ -494,6 +525,10 @@ export default function DashboardPage() {
 
               {/* Rows list */}
               <div className="space-y-1.5 flex-grow overflow-y-auto pr-1">
+                {isInitialLoading && [0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8 w-full rounded-xl" />)}
+                {!isInitialLoading && leaderboard.length === 0 && (
+                  <p className="text-[11px] text-gray-400 font-semibold text-center py-6">No leaderboard data yet</p>
+                )}
                 {leaderboard.map((row) => (
                   <div
                     key={row.rank}
@@ -539,6 +574,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3.5 flex-grow overflow-y-auto">
+              {isInitialLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-[66px] w-full rounded-xl" />)}
+              {!isInitialLoading && challenges.length === 0 && (
+                <p className="text-[11px] text-gray-400 font-semibold text-center py-6">No active challenges yet</p>
+              )}
               {challenges.map((chal, i) => (
                 <Link key={chal.id || i} href="/dashboard/challenges" className="p-3 rounded-xl border border-gray-150 bg-white flex flex-col space-y-2 hover:border-emerald-300 transition block">
                   <div className="flex items-center justify-between">
@@ -594,7 +633,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col space-y-1">
                   <div className="flex items-center justify-between text-[9px] text-gray-400 font-bold">
                     <span>Progress</span>
-                    <span>{learningWidget.progress}%</span>
+                    {isInitialLoading ? <Skeleton className="h-3 w-6" /> : <span>{learningWidget.progress}%</span>}
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full w-full overflow-hidden">
                     <div className="h-full bg-[#16a34a] rounded-full transition-all duration-500" style={{ width: `${learningWidget.progress}%` }} />
